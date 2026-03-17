@@ -51,12 +51,11 @@ import { ConfidenceService } from './application/services/confidence.service';
     OllamaModule,
     S3Module,
     QdrantModule,
-    PrismaModule,   // ← замінили PostgresModule
+    PrismaModule,
     Neo4jModule,
     RagCommandBusModule,
   ],
   providers: [
-    // OllamaService НЕ дублюємо тут — він вже доступний через OllamaModule
     { provide: 'LoggerPort',              useClass: ConsoleLoggerAdapter },
     { provide: 'IEmbeddingPort',          useClass: OllamaEmbeddingAdapter },
     { provide: 'IChatLlmPort',            useClass: OllamaChatAdapter },

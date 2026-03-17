@@ -10,6 +10,7 @@ exports.Neo4jModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const neo4j_knowledge_graph_service_1 = require("./neo4j-knowledge-graph.service");
+const console_logger_adapter_1 = require("../../shared/application/ports/console.logger.adapter");
 let Neo4jModule = class Neo4jModule {
 };
 exports.Neo4jModule = Neo4jModule;
@@ -21,6 +22,10 @@ exports.Neo4jModule = Neo4jModule = __decorate([
             {
                 provide: 'IKnowledgeGraphService',
                 useClass: neo4j_knowledge_graph_service_1.Neo4jKnowledgeGraphService,
+            },
+            {
+                provide: 'LoggerPort',
+                useClass: console_logger_adapter_1.ConsoleLoggerAdapter
             },
         ],
         exports: [
