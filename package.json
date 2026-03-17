@@ -4,7 +4,7 @@
   "description": "RAG Implementation with NestJS",
   "scripts": {
     "build": "nest build",
-    "start": "node dist/main",
+    "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "start:debug": " nest start --debug --watch",
     "start:prod": "node dist/main",
