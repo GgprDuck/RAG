@@ -1,0 +1,27 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")  // ← This line was missing
+}
+
+model ConversationSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  sessionId String   @map("session_id") @db.VarChar(255)
+  query     String   @db.Text
+  answer    String   @db.Text
+  embedding Float[]  @db.Real
+  timestamp DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([sessionId, timestamp])
+  @@index([sessionId])
+  @@index([timestamp])
+  @@map("conversation_sessions")
+}
