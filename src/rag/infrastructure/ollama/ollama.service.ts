@@ -33,8 +33,8 @@ export class OllamaService {
   private readonly baseURL: string;
   private readonly apiKey?: string;
   private readonly textEmbedModel: string;
-  private readonly chatModel: string;
-  private readonly visionModel: string;
+  private readonly chatModel: string | undefined;
+  private readonly visionModel: string | undefined;
   private readonly timeout = 60_000;
   private readonly visionTimeout = 120_000;
 
@@ -44,21 +44,16 @@ export class OllamaService {
   ) {
     const ragConfig = this.configService.get<TRagConfig>(RAG_CONFIG);
 
-    // 👉 Cloud endpoint
-    this.baseURL =
-      ragConfig?.ollamaBaseUrl || 'https://ollama.com';
+    this.baseURL = ragConfig?.ollamaBaseUrl || 'https://ollama.com';
 
-    this.apiKey = process.env.OLLAMA_API_KEY;
-
-    // 👉 сумісні cloud моделі
     this.textEmbedModel =
       ragConfig?.ollamaEmbedModelText || 'nomic-embed-text';
 
     this.chatModel =
-      ragConfig?.ollamaChatModel || 'llama3';
+      ragConfig?.ollamaChatModel;
 
     this.visionModel =
-      ragConfig?.ollamaVisionModel || 'llama3';
+      ragConfig?.ollamaVisionModel;
 
     if (!this.apiKey) {
       this.logger.warn('OLLAMA_API_KEY is not set!');
@@ -182,6 +177,8 @@ export class OllamaService {
           headers: this.getHeaders(),
         },
       );
+
+      console.log('response :>> ', response);
 
       if (!response.data?.message?.content) {
         throw new Error('Invalid LLM response');

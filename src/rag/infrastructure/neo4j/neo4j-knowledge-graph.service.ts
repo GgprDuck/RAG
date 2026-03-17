@@ -91,7 +91,7 @@ export class Neo4jKnowledgeGraphService
 
       this.logger.log('Neo4j connected');
     } catch (error) {
-      this.isEnabled = false; // ❗ вимикаємо сервіс
+      this.isEnabled = false;
       this.logger.warn('Neo4j disabled (connection failed)', {
         error: (error as Error).message,
       });

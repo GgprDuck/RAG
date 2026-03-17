@@ -32,15 +32,13 @@ let OllamaService = class OllamaService {
         this.timeout = 60_000;
         this.visionTimeout = 120_000;
         const ragConfig = this.configService.get(rag_config_1.RAG_CONFIG);
-        this.baseURL =
-            ragConfig?.ollamaBaseUrl || 'https://ollama.com';
-        this.apiKey = process.env.OLLAMA_API_KEY;
+        this.baseURL = ragConfig?.ollamaBaseUrl || 'https://ollama.com';
         this.textEmbedModel =
             ragConfig?.ollamaEmbedModelText || 'nomic-embed-text';
         this.chatModel =
-            ragConfig?.ollamaChatModel || 'llama3';
+            ragConfig?.ollamaChatModel;
         this.visionModel =
-            ragConfig?.ollamaVisionModel || 'llama3';
+            ragConfig?.ollamaVisionModel;
         if (!this.apiKey) {
             this.logger.warn('OLLAMA_API_KEY is not set!');
         }
@@ -133,6 +131,7 @@ let OllamaService = class OllamaService {
                 timeout: this.timeout,
                 headers: this.getHeaders(),
             });
+            console.log('response :>> ', response);
             if (!response.data?.message?.content) {
                 throw new Error('Invalid LLM response');
             }
