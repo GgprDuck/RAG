@@ -51,8 +51,8 @@ export interface FineTuningParams {
 
 const PROFILE_BY_TYPE: Record<QueryType, FineTuningParams> = {
   entity: {
-    limit:                    12,
-    scoreThreshold:           0.52,
+    limit:                    14,
+    scoreThreshold:           0.5,
     searchMode:               'entity',
     useHybridSearch:          true,
     useQueryTransformation:   true,

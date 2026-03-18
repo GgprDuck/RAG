@@ -554,33 +554,65 @@ let TextRagService = TextRagService_1 = class TextRagService {
         }
         const PROMPTS = {
             entity: `
-    Ти — асистент корпоративної бази знань.
-    
-    ТВОЄ ГОЛОВНЕ ПРАВИЛО:
-    Відповідати ТІЛЬКИ на основі інформації з <context>.
-    Використай весь надайний текст
-    ЗАБОРОНЕНО вигадувати або додавати знання поза контекстом.
-    
-    <context>
-    ${context}
-    </context>
-    
-    ЗАВДАННЯ:
-    
-    1. Уважно проаналізуй контекст.
-    2. Визнач усі факти, які стосуються людини з питання.
-    3. Згрупуй інформацію у логічні підтеми.
-    4. Сформуй структуровану відповідь.
-    
-    ПРАВИЛА:
-    - використовуй лише інформацію з context
-    - якщо даних немає — напиши "Інформація відсутня в базі знань"
-    - не повторюй однакову інформацію
-    
-    Питання:
-    ${query}
-    
-    Відповідь:
+Ти — асистент корпоративної бази знань.
+
+ТВОЄ ГОЛОВНЕ ПРАВИЛО:
+Відповідати ТІЛЬКИ на основі інформації з <context>.
+ЗАБОРОНЕНО вигадувати або використовувати зовнішні знання.
+
+---
+
+АЛГОРИТМ РОБОТИ:
+
+1. ПРОАНАЛІЗУЙ ВЕСЬ <context> повністю
+   - Не ігноруй початок або середину
+   - Не віддавай перевагу останнім фрагментам
+
+2. ЗНАЙДИ релевантні фрагменти
+   - Визнач всі частини, які можуть містити відповідь
+   - Їх може бути декілька
+
+3. ОЦІНИ релевантність
+   - Відкинь нерелевантні частини
+   - Обери найкращі (1–5 фрагментів)
+
+4. СИНТЕЗУЙ відповідь
+   - Об'єднай інформацію з кількох місць
+   - Не копіюй сліпо — узагальни
+
+5. ДОДАЙ ПОСИЛАННЯ (citation)
+   - Вкажи, з яких частин контексту взята інформація
+   - Формат: [chunk_1], [chunk_3]
+
+6. ЯКЩО НЕМАЄ ВІДПОВІДІ:
+   - Напиши: "У контексті немає інформації для відповіді"
+
+---
+
+ФОРМАТ КОНТЕКСТУ:
+Кожен фрагмент має вигляд:
+[chunk_id]: текст
+
+---
+
+<context>
+${context}
+</context>
+
+---
+
+Питання:
+${query}
+
+---
+
+ФОРМАТ ВІДПОВІДІ:
+
+Відповідь:
+<текст відповіді>
+
+Джерела:
+[chunk_X], [chunk_Y]
     `,
             factual: `
     Ти — асистент корпоративної бази знань.
@@ -732,9 +764,7 @@ let TextRagService = TextRagService_1 = class TextRagService {
             yield { event: 'done', metadata: { relevantChunks: 0, citations: [] } };
             return;
         }
-        const filtered = p.scoreThreshold
-            ? rawRetrieved.filter(el => (el.score ?? 0) >= p.scoreThreshold)
-            : rawRetrieved;
+        const filtered = rawRetrieved.filter(el => (el.score ?? 0) >= p.scoreThreshold);
         const retrieved = p.useParentExpansion
             ? this.expandToParentContext(filtered)
             : filtered;
@@ -752,8 +782,8 @@ let TextRagService = TextRagService_1 = class TextRagService {
         if (useKG)
             kgContext = await this.queryKnowledgeGraph(query);
         const context = retrieved
-            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-            .map(doc => doc.text)
+            .map((doc, i) => `[chunk_${i + 1}]: ${doc.text}`)
+            .slice(0, 7)
             .join('\n\n');
         let historyBlock = '';
         if (options?.conversationHistory?.length) {
