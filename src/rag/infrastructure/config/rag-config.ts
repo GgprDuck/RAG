@@ -37,6 +37,10 @@ export type TRagConfig = {
   imageRagVectorSize: number;
   imageRagMinScoreThreshold: number;
   imageRagHnswConfig?: HnswConfig;
+
+  neo4JUrl: string | undefined;
+  neo4jUser: string | undefined;
+  neo4jPassword: string | undefined;
 };
 
 export const ragConfig = registerAs(RAG_CONFIG, (): TRagConfig => {
@@ -73,6 +77,10 @@ export const ragConfig = registerAs(RAG_CONFIG, (): TRagConfig => {
     IMAGE_RAG_HNSW_M,
     IMAGE_RAG_HNSW_EF_CONSTRUCT,
     IMAGE_RAG_HNSW_EF_SEARCH,
+
+    NEO4J_URI,
+    NEO4J_USER,
+    NEO4J_PASSWORD,
   } = process.env;
 
   const parseHnswConfig = (
@@ -136,5 +144,9 @@ export const ragConfig = registerAs(RAG_CONFIG, (): TRagConfig => {
       IMAGE_RAG_HNSW_EF_CONSTRUCT,
       IMAGE_RAG_HNSW_EF_SEARCH,
     ),
+
+    neo4JUrl: NEO4J_URI,
+    neo4jPassword: NEO4J_PASSWORD,
+    neo4jUser: NEO4J_USER,
   };
 });

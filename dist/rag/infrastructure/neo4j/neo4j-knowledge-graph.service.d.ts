@@ -37,13 +37,12 @@ export declare class Neo4jKnowledgeGraphService implements IKnowledgeGraphServic
     constructor(configService: ConfigService, logger: LoggerPort);
     onModuleInit(): Promise<void>;
     onModuleDestroy(): Promise<void>;
-    private createIndexes;
     addEntity(entity: KnowledgeGraphEntity): Promise<void>;
-    addRelationship(): Promise<void>;
-    queryEntities(): Promise<KnowledgeGraphEntity[]>;
-    getEntityById(): Promise<KnowledgeGraphEntity | null>;
-    getRelatedEntities(): Promise<KnowledgeGraphEntity[]>;
-    deleteEntity(): Promise<void>;
+    addRelationship(rel: KnowledgeGraphRelationship): Promise<void>;
+    queryEntities(query: string): Promise<KnowledgeGraphEntity[]>;
+    getEntityById(id: string): Promise<KnowledgeGraphEntity | null>;
+    getRelatedEntities(entityId: string, depth?: number): Promise<KnowledgeGraphEntity[]>;
+    deleteEntity(id: string): Promise<void>;
     clearGraph(): Promise<void>;
     getGraphStats(): Promise<any>;
 }

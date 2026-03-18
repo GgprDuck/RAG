@@ -115,8 +115,6 @@ export class HybridSearchEngine {
       score_threshold: qdrantScoreThreshold,
     });
 
-    console.log('vectorResults :>> ', vectorResults);
-
     const useKeywordScroll = (mode === 'entity' || mode === 'balanced' || mode === 'wide') && keywords.length > 0;
     let keywordScrollPoints: Array<{ id: string; payload: Record<string, any> }> = [];
     if (useKeywordScroll) {

@@ -29,5 +29,8 @@ export type TRagConfig = {
     imageRagVectorSize: number;
     imageRagMinScoreThreshold: number;
     imageRagHnswConfig?: HnswConfig;
+    neo4JUrl: string | undefined;
+    neo4jUser: string | undefined;
+    neo4jPassword: string | undefined;
 };
 export declare const ragConfig: (() => TRagConfig) & import("@nestjs/config").ConfigFactoryKeyHost<TRagConfig>;
