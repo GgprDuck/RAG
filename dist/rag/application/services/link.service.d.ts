@@ -18,8 +18,11 @@ export declare class LinkService {
     }>;
     findLinksForQuery(query: string): Promise<LinkSearchResult>;
     findLinksForContext(query: string): Promise<LinkSearchResult>;
-    private extractQueryKeywords;
-    private rankLinks;
+    private filterValid;
+    private filterReachable;
+    private isReachable;
+    private isAllowedStatus;
     private linkScore;
+    private rankLinks;
     private formatLinksBlock;
 }

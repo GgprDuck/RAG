@@ -46,6 +46,7 @@ import {
 import { SearchMode } from '../../infrastructure/qdrant/rag-qdrant.service';
 import { QueryClassifier, FineTuningParams } from '../utils/query-classefire.util';
 import { IConfidencePort } from '../../domain/ports/confidence.port';
+import { LinkService } from './link.service';
 
 const MIN_CHUNK_TEXT_LENGTH = 80;
 const UPLOAD_CONCURRENCY = 3;
@@ -108,6 +109,7 @@ export class TextRagService implements TextRagPort {
     private readonly logger: LoggerPort,
     @Inject('IConfidencePort')
     private readonly confidencePort: IConfidencePort,
+    private readonly linkService: LinkService,
   ) {
     this.queryTransformer     = new QueryTransformer(this.ollama);
     this.reranker             = new Reranker(this.ollama);
@@ -525,13 +527,10 @@ export class TextRagService implements TextRagPort {
     if (useQueryTransformation) {
       try {
         const transformed = await this.queryTransformer.transformQuery(query);
-        console.log('transformed :>> ', transformed);
-
 
         keywords = transformed.keywords.filter(
           kw => kw.length > 2 && !KEYWORD_STOP_WORDS.has(kw.toLowerCase()),
         );
-
 
         const isShortQuery = query.trim().split(/\s+/).length <= 3;
         queriesToEmbed = isShortQuery
@@ -542,8 +541,6 @@ export class TextRagService implements TextRagPort {
               ...transformed.rephrased.slice(0, 1),
             ].filter(Boolean).slice(0, 4);
 
-        // For English queries: inject Ukrainian equivalents so vector search
-        // hits Ukrainian knowledge chunks (documents are stored in Ukrainian).
         const uaTranslations = translateQueryToUkrainian(query);
         if (uaTranslations.length > 0) {
           this.logger.log('EN→UA query translation', { query, uaTranslations });
@@ -554,9 +551,6 @@ export class TextRagService implements TextRagPort {
         keywords = [];
       }
     }
-
-    console.log('keywords :>> ', keywords);
-    console.log('queriesToEmbed :>> ', queriesToEmbed);
 
     if (useConversationMemory && sessionId) {
       const history = await this.conversationRepository.getHistory(sessionId, 2);
@@ -575,10 +569,8 @@ export class TextRagService implements TextRagPort {
 
     const effectivenessLimit = (searchMode === 'entity' ? 6 : 4) * effectiveLimit;
 
-    console.log('effectivenessLimit :>> ', effectivenessLimit);
-
     if (useHybridSearch) {
-      const allSearchResults = await Promise.all(
+      let allSearchResults = await Promise.all(
         embeddings.map(emb =>
           this.hybridSearch.search(
             collectionName,
@@ -595,10 +587,29 @@ export class TextRagService implements TextRagPort {
         ),
       );
 
-      console.log('allSearchResults.length :>> ', allSearchResults.length);
+      const isCompletelyEmpty = allSearchResults.every(arr => arr!.length === 0);
+
+      if (isCompletelyEmpty) {
+        allSearchResults = await Promise.all(
+          embeddings.map(emb =>
+            this.hybridSearch.search(
+              collectionName,
+              new Embedding(extractEmbedding(emb)),
+              keywords,
+              effectivenessLimit,
+              {
+                searchMode,
+                minTextLength:  MIN_CHUNK_TEXT_LENGTH,
+                originalQuery:  query,
+              },
+            ),
+          ),
+        );
+      }
+
 
       const validResults = allSearchResults.filter(Boolean) as NonNullable<typeof allSearchResults[0]>[];
-      console.log('validResults.length :>> ', validResults.length);
+
       if (validResults.length === 0) return 'There is no relevant information in knowledge';
 
       const mergedMap = new Map<string, HybridSearchResult>();
@@ -610,8 +621,6 @@ export class TextRagService implements TextRagPort {
           }
         }
       }
-
-      console.log('mergedMap :>> ', mergedMap);
 
       const uaTranslations = translateQueryToUkrainian(query);
       if (uaTranslations.length > 0 && collectionName) {
@@ -637,7 +646,6 @@ export class TextRagService implements TextRagPort {
               if (text.trim().length < MIN_CHUNK_TEXT_LENGTH) continue;
               const uaScore = p.score ?? 0;
               const existing = mergedMap.get(id);
-              // Always upsert: UA vector score is more reliable for UA/EN chunks
               if (!existing || uaScore > existing.hybridScore) {
                 mergedMap.set(id, {
                   id,
@@ -657,8 +665,6 @@ export class TextRagService implements TextRagPort {
           this.logger.warn('UA vector search failed', { error: err?.message });
         }
       }
-
-      console.log('uaTranslations :>> ', uaTranslations);
 
       results = [...mergedMap.values()]
         .sort((a, b) => b.hybridScore - a.hybridScore)
@@ -687,6 +693,7 @@ export class TextRagService implements TextRagPort {
       });
 
       const topScores   = results.slice(0, 3).map(r => r.score ?? 0);
+
       const avgTopScore = topScores.length
         ? topScores.reduce((a, b) => a + b, 0) / topScores.length
         : 0;
@@ -723,12 +730,11 @@ export class TextRagService implements TextRagPort {
       results = reranked.map(r => ({ id: r.item.id, text: r.item.text, score: r.finalScore }));
     }
 
-    // Filter out parent stubs (level 0, stored with zero vector — score always near 0)
     results = results.filter(r => r.score > 0.1);
     results = results.filter(r => (r as any).level !== 0);
     results = results.slice(0, effectiveLimit);
 
-    if (searchMode === 'entity') {
+    if (searchMode === 'wide' || searchMode === 'entity') {
       const nameTokenGroups = this.extractNameTokens(query);
       if (nameTokenGroups.length > 0) {
         const chunkMatches = (text: string, groups: string[][]): boolean => {
@@ -860,12 +866,6 @@ export class TextRagService implements TextRagPort {
       2. Визнач точну відповідь на питання
       3. Якщо інформація розкидана по кількох місцях — ОБ'ЄДНАЙ її в одну відповідь
       4. Якщо є часткова інформація — дай часткову відповідь, не мовчи
-
-      ФОРМАТ:
-
-      - 1–3 речення
-      - максимально конкретно
-      - без зайвих деталей
 
       ВАЖЛИВО:
 
@@ -1180,7 +1180,12 @@ export class TextRagService implements TextRagPort {
       _searchMode:              p.searchMode,
     };
 
-    const rawRetrieved = await this.retrieve(query, undefined, retrieveOptions);
+    const [rawRetrieved, linksResult] = await Promise.all([
+      this.retrieve(query, undefined, retrieveOptions),
+      this.linkService.findLinksForQuery(query).then(result =>
+        result.found ? result : this.linkService.findLinksForContext(query),
+      ),
+    ]);
 
     if (typeof rawRetrieved === 'string') {
       yield { event: 'metadata', metadata: { relevantChunks: 0, citations: [] } };
@@ -1202,13 +1207,9 @@ export class TextRagService implements TextRagPort {
 
     const postFilterResults = preFiltered.length > 0 ? preFiltered : rawRetrieved.slice(0, 3);
 
-    console.log('postFilterResults.length :>> ', postFilterResults.length);
-
     const retrieved = p.useParentExpansion
       ? await this.expandToParentContext(postFilterResults)
       : postFilterResults;
-
-    console.log('retrieved.length :>> ', retrieved.length);
 
     if (retrieved.length === 0) {
       yield {
@@ -1232,8 +1233,6 @@ export class TextRagService implements TextRagPort {
 
     let prompt = this.buildPrompt(classification.type, context, query);
 
-    console.log('prompt.length :>> ', prompt.length);
-
     if (kgContext) {
       prompt +=
         `\n\n<knowledge_graph>\n${kgContext}\n</knowledge_graph>\n` +
@@ -1246,6 +1245,22 @@ export class TextRagService implements TextRagPort {
         options.conversationHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n') +
         '\n';
       prompt += `\n\n<conversation_history>\n${historyBlock}\n</conversation_history>`;
+    }
+
+    if (classification.type !== 'entity') {
+      prompt += `
+      \n\n<linksResult>
+      ${linksResult.block}
+      </linksResult>
+
+      <links_usage_rules>
+        - Використовуй linksResult лише якщо хоча б одне посилання прямо відповідає на запит користувача
+        - Якщо посилання лише дотично пов’язані — НЕ використовуй їх
+        - Не вставляй посилання, якщо відповідь і так повна без них
+        - Максимум 1–3 посилання
+        - Не додавай блок посилань автоматично
+      </links_usage_rules>
+    `;
     }
 
     prompt += `\n\n<question>${query}</question>\n\nВідповідь (структурована, на основі контексту):`;
@@ -1285,7 +1300,6 @@ export class TextRagService implements TextRagPort {
         yield { event: 'token', token };
       }
     } catch (err: any) {
-      console.log('err :>> ', err);
       yield { event: 'error', error: err?.message ?? 'LLM streaming failed' };
       return;
     }
@@ -1300,8 +1314,6 @@ export class TextRagService implements TextRagPort {
         grounded: verification.grounded,
         verdict:  verification.llmVerdict,
       });
-
-
 
       if (
         !verification.grounded &&

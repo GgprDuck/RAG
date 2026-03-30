@@ -32,6 +32,7 @@ const hybrid_search_util_1 = require("../utils/hybrid-search.util");
 const contextual_compression_util_1 = require("../utils/contextual-compression.util");
 const transliteration_util_1 = require("../utils/transliteration.util");
 const query_classefire_util_1 = require("../utils/query-classefire.util");
+const link_service_1 = require("./link.service");
 const MIN_CHUNK_TEXT_LENGTH = 80;
 const UPLOAD_CONCURRENCY = 3;
 const MAX_CONTEXT_CHARS = 6000;
@@ -46,7 +47,7 @@ const KEYWORD_STOP_WORDS = new Set([
 ]);
 const FACTUAL_SCORE_THRESHOLD_CAP = 0.65;
 let TextRagService = class TextRagService {
-    constructor(configService, ollama, qdrantService, textRepository, conversationRepository, knowledgeGraph, logger, confidencePort) {
+    constructor(configService, ollama, qdrantService, textRepository, conversationRepository, knowledgeGraph, logger, confidencePort, linkService) {
         this.configService = configService;
         this.ollama = ollama;
         this.qdrantService = qdrantService;
@@ -55,6 +56,7 @@ let TextRagService = class TextRagService {
         this.knowledgeGraph = knowledgeGraph;
         this.logger = logger;
         this.confidencePort = confidencePort;
+        this.linkService = linkService;
         this.queryTransformer = new query_transformer_util_1.QueryTransformer(this.ollama);
         this.reranker = new reranker_util_1.Reranker(this.ollama);
         this.hybridSearch = new hybrid_search_util_1.HybridSearchEngine(this.qdrantService, this.configService);
@@ -348,7 +350,6 @@ let TextRagService = class TextRagService {
         if (useQueryTransformation) {
             try {
                 const transformed = await this.queryTransformer.transformQuery(query);
-                console.log('transformed :>> ', transformed);
                 keywords = transformed.keywords.filter(kw => kw.length > 2 && !KEYWORD_STOP_WORDS.has(kw.toLowerCase()));
                 const isShortQuery = query.trim().split(/\s+/).length <= 3;
                 queriesToEmbed = isShortQuery
@@ -368,8 +369,6 @@ let TextRagService = class TextRagService {
                 keywords = [];
             }
         }
-        console.log('keywords :>> ', keywords);
-        console.log('queriesToEmbed :>> ', queriesToEmbed);
         if (useConversationMemory && sessionId) {
             const history = await this.conversationRepository.getHistory(sessionId, 2);
             if (history.length > 0) {
@@ -381,17 +380,22 @@ let TextRagService = class TextRagService {
         const primaryEmbedding = new embedding_vo_1.Embedding((0, embedding_util_1.extractEmbedding)(embeddings[0]));
         let results = [];
         const effectivenessLimit = (searchMode === 'entity' ? 6 : 4) * effectiveLimit;
-        console.log('effectivenessLimit :>> ', effectivenessLimit);
         if (useHybridSearch) {
-            const allSearchResults = await Promise.all(embeddings.map(emb => this.hybridSearch.search(collectionName, new embedding_vo_1.Embedding((0, embedding_util_1.extractEmbedding)(emb)), keywords, effectivenessLimit, {
+            let allSearchResults = await Promise.all(embeddings.map(emb => this.hybridSearch.search(collectionName, new embedding_vo_1.Embedding((0, embedding_util_1.extractEmbedding)(emb)), keywords, effectivenessLimit, {
                 searchMode,
                 minTextLength: MIN_CHUNK_TEXT_LENGTH,
                 originalQuery: query,
                 ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
             })));
-            console.log('allSearchResults.length :>> ', allSearchResults.length);
+            const isCompletelyEmpty = allSearchResults.every(arr => arr.length === 0);
+            if (isCompletelyEmpty) {
+                allSearchResults = await Promise.all(embeddings.map(emb => this.hybridSearch.search(collectionName, new embedding_vo_1.Embedding((0, embedding_util_1.extractEmbedding)(emb)), keywords, effectivenessLimit, {
+                    searchMode,
+                    minTextLength: MIN_CHUNK_TEXT_LENGTH,
+                    originalQuery: query,
+                })));
+            }
             const validResults = allSearchResults.filter(Boolean);
-            console.log('validResults.length :>> ', validResults.length);
             if (validResults.length === 0)
                 return 'There is no relevant information in knowledge';
             const mergedMap = new Map();
@@ -403,7 +407,6 @@ let TextRagService = class TextRagService {
                     }
                 }
             }
-            console.log('mergedMap :>> ', mergedMap);
             const uaTranslations = (0, query_transformer_util_1.translateQueryToUkrainian)(query);
             if (uaTranslations.length > 0 && collectionName) {
                 try {
@@ -443,7 +446,6 @@ let TextRagService = class TextRagService {
                     this.logger.warn('UA vector search failed', { error: err?.message });
                 }
             }
-            console.log('uaTranslations :>> ', uaTranslations);
             results = [...mergedMap.values()]
                 .sort((a, b) => b.hybridScore - a.hybridScore)
                 .map(r => ({ id: r.id, text: r.text, score: r.hybridScore }));
@@ -497,7 +499,7 @@ let TextRagService = class TextRagService {
         results = results.filter(r => r.score > 0.1);
         results = results.filter(r => r.level !== 0);
         results = results.slice(0, effectiveLimit);
-        if (searchMode === 'entity') {
+        if (searchMode === 'wide' || searchMode === 'entity') {
             const nameTokenGroups = this.extractNameTokens(query);
             if (nameTokenGroups.length > 0) {
                 const chunkMatches = (text, groups) => {
@@ -614,12 +616,6 @@ let TextRagService = class TextRagService {
       2. Визнач точну відповідь на питання
       3. Якщо інформація розкидана по кількох місцях — ОБ'ЄДНАЙ її в одну відповідь
       4. Якщо є часткова інформація — дай часткову відповідь, не мовчи
-
-      ФОРМАТ:
-
-      - 1–3 речення
-      - максимально конкретно
-      - без зайвих деталей
 
       ВАЖЛИВО:
 
@@ -854,7 +850,10 @@ let TextRagService = class TextRagService {
             sessionId: options?.sessionId,
             _searchMode: p.searchMode,
         };
-        const rawRetrieved = await this.retrieve(query, undefined, retrieveOptions);
+        const [rawRetrieved, linksResult] = await Promise.all([
+            this.retrieve(query, undefined, retrieveOptions),
+            this.linkService.findLinksForQuery(query).then(result => result.found ? result : this.linkService.findLinksForContext(query)),
+        ]);
         if (typeof rawRetrieved === 'string') {
             yield { event: 'metadata', metadata: { relevantChunks: 0, citations: [] } };
             yield { event: 'token', token: rawRetrieved };
@@ -870,11 +869,9 @@ let TextRagService = class TextRagService {
             ? rawRetrieved.filter(el => (el.score ?? 0) >= effectiveThreshold)
             : rawRetrieved;
         const postFilterResults = preFiltered.length > 0 ? preFiltered : rawRetrieved.slice(0, 3);
-        console.log('postFilterResults.length :>> ', postFilterResults.length);
         const retrieved = p.useParentExpansion
             ? await this.expandToParentContext(postFilterResults)
             : postFilterResults;
-        console.log('retrieved.length :>> ', retrieved.length);
         if (retrieved.length === 0) {
             yield {
                 event: 'metadata',
@@ -894,7 +891,6 @@ let TextRagService = class TextRagService {
             .map(doc => doc.text)
             .join('\n\n');
         let prompt = this.buildPrompt(classification.type, context, query);
-        console.log('prompt.length :>> ', prompt.length);
         if (kgContext) {
             prompt +=
                 `\n\n<knowledge_graph>\n${kgContext}\n</knowledge_graph>\n` +
@@ -905,6 +901,21 @@ let TextRagService = class TextRagService {
                 options.conversationHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n') +
                 '\n';
             prompt += `\n\n<conversation_history>\n${historyBlock}\n</conversation_history>`;
+        }
+        if (classification.type !== 'entity') {
+            prompt += `
+      \n\n<linksResult>
+      ${linksResult.block}
+      </linksResult>
+
+      <links_usage_rules>
+        - Використовуй linksResult лише якщо хоча б одне посилання прямо відповідає на запит користувача
+        - Якщо посилання лише дотично пов’язані — НЕ використовуй їх
+        - Не вставляй посилання, якщо відповідь і так повна без них
+        - Максимум 1–3 посилання
+        - Не додавай блок посилань автоматично
+      </links_usage_rules>
+    `;
         }
         prompt += `\n\n<question>${query}</question>\n\nВідповідь (структурована, на основі контексту):`;
         yield {
@@ -942,7 +953,6 @@ let TextRagService = class TextRagService {
             }
         }
         catch (err) {
-            console.log('err :>> ', err);
             yield { event: 'error', error: err?.message ?? 'LLM streaming failed' };
             return;
         }
@@ -1185,6 +1195,6 @@ exports.TextRagService = TextRagService = __decorate([
     __param(7, (0, common_1.Inject)('IConfidencePort')),
     __metadata("design:paramtypes", [config_1.ConfigService,
         ollama_service_1.OllamaService,
-        rag_qdrant_service_1.RagQdrantService, Object, Object, Object, Object, Object])
+        rag_qdrant_service_1.RagQdrantService, Object, Object, Object, Object, Object, link_service_1.LinkService])
 ], TextRagService);
 //# sourceMappingURL=text-rag.service.js.map

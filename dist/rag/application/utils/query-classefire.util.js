@@ -24,7 +24,7 @@ const PROFILE_BY_TYPE = {
     },
     factual: {
         limit: 15,
-        scoreThreshold: 0.9,
+        scoreThreshold: 0.85,
         searchMode: 'balanced',
         useHybridSearch: true,
         useQueryTransformation: true,
@@ -44,7 +44,7 @@ const PROFILE_BY_TYPE = {
     },
     wide: {
         limit: 12,
-        scoreThreshold: 0.62,
+        scoreThreshold: 0.72,
         searchMode: 'wide',
         useHybridSearch: true,
         useQueryTransformation: true,
@@ -65,12 +65,12 @@ const PROFILE_BY_TYPE = {
 };
 function preGuardClassify(query) {
     const q = query.toLowerCase().replace(/[?!.,;:]/g, '').trim();
-    const isNameOriginQuery = /\b(why|what|how)\b.{0,30}\b(name|called|named|mean|origin|history|founded|create)\b/i.test(q) ||
+    const isNameOriginQuery = /\b(why|what|what is)\b.{0,30}\b(name|called|named|mean|origin|history|founded|create)\b/i.test(q) ||
         /\b(name|назв).{0,20}\b(company|компан|brand|бренд)\b/i.test(q) ||
         /\b(company|компан).{0,20}\b(name|назв|called|mean)\b/i.test(q);
     if (isNameOriginQuery)
         return 'factual';
-    const isAboutSomething = /\b(tell me about|describe|overview of|what is|what are)\b/i.test(q) ||
+    const isAboutSomething = /\b(tell me about|describe|overview of|what are)\b/i.test(q) ||
         /\b(розкажи|опиши|що таке|що це)\b/i.test(q);
     const hasNonPersonSubject = /\b(company|компан|organization|product|tool|department|відділ|команд|team|process|процес|academy|академі|platform|system|системи|software)\b/i.test(q);
     if (isAboutSomething && hasNonPersonSubject)
@@ -86,6 +86,7 @@ class QueryClassifier {
         if (preGuard !== null) {
             return this.build(preGuard, 0.9);
         }
+        console.log('preGuard :>> ', preGuard);
         const prompt = `You are a query classifier for a Ukrainian corporate knowledge base RAG system.
 Classify the query into EXACTLY ONE type. Reply ONLY with valid JSON — no markdown, no commentary.
 
@@ -109,7 +110,8 @@ TYPES:
                         "Коли заснована компанія?", "Як оплатити коворкінг з фоп?",
                         "А як тепер аппрувиться лікарняний?",
                         "why name company onix?", "what does the name onix mean?",
-                        "when was onix founded?", "why is the company called onix?"
+                        "when was onix founded?", "why is the company called onix?",
+                        "what is vacation policy on company?"
 
   "wide"    — comprehensive overview, listing, procedural, or comparative.
               Use for DEPARTMENT / TEAM / TOOL / PROCESS / COMPANY overviews, and step-by-step guides.
@@ -135,6 +137,7 @@ JSON: {"type": "entity" | "factual" | "wide", "confidence": 0.0-1.0}`;
             const parsed = JSON.parse(match[0]);
             if (!PROFILE_BY_TYPE[parsed.type])
                 return this.default();
+            console.log('parsed.type :>> ', parsed.type);
             const isLinkQuery = /посилання|лінк[аи]|сайт[іу]?\b|url\b|link\b/i.test(query);
             if (isLinkQuery && parsed.type === 'factual') {
                 return this.build('factual', parsed.confidence, {

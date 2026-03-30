@@ -6,5 +6,6 @@ export interface ExtractedLink {
     linkType: LinkType;
     keywords: string[];
 }
+export declare function isValidUrl(url: string): boolean;
 export declare function extractLinksFromMarkdown(content: string, sourceFile: string): Omit<IKnowledgeLink, 'id' | 'createdAt' | 'updatedAt'>[];
 export declare function isLinkQuery(query: string): boolean;

@@ -19,15 +19,11 @@ const platform_express_1 = require("@nestjs/platform-express");
 const multer_1 = require("multer");
 const extract_links_handler_1 = require("../../application/handlers/extract-links.handler");
 const extract_links_command_1 = require("../../application/commands/extract-links.command");
-const mdFilesInterceptor = () => (0, platform_express_1.FilesInterceptor)('files', 200, {
+const mdFilesInterceptor = () => (0, platform_express_1.FilesInterceptor)('files', 10_000, {
     storage: (0, multer_1.memoryStorage)(),
     fileFilter: (_req, file, cb) => {
-        if (file.originalname.endsWith('.md')) {
-            cb(null, true);
-        }
-        else {
-            cb(null, false);
-        }
+        const name = file.originalname.toLowerCase();
+        cb(null, name.endsWith('.md') || name.endsWith('.markdown'));
     },
 });
 let LinksController = class LinksController {
@@ -96,10 +92,23 @@ let LinksController = class LinksController {
         if (!files || files.length === 0) {
             throw new common_1.BadRequestException('No .md files received. Send files under the "files" multipart field.');
         }
-        this.logger.log('UploadFolderController: indexLinks received', {
-            files: files.map(f => f.originalname),
+        const normalizedFiles = files.map((file) => ({
+            ...file,
+            originalname: file.originalname
+                .replace(/\\/g, '/')
+                .replace(/^\/+/, ''),
+        }));
+        const folderRoots = [
+            ...new Set(normalizedFiles
+                .map((f) => f.originalname.split('/').slice(0, -1).join('/'))
+                .filter(Boolean)),
+        ];
+        this.logger.log('LinksController.indexLinks received', {
+            totalFiles: normalizedFiles.length,
+            folderRoots: folderRoots.length ? folderRoots : ['(flat — no subfolders)'],
+            files: normalizedFiles.map((f) => f.originalname),
         });
-        return this.handler.execute(new extract_links_command_1.IndexLinksCommand(files));
+        return this.handler.execute(new extract_links_command_1.IndexLinksCommand(normalizedFiles));
     }
 };
 exports.LinksController = LinksController;

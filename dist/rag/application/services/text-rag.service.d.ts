@@ -11,6 +11,7 @@ import { IConversationSessionRepository } from 'src/rag/domain/ports/conversatio
 import { AskQuestionOptions } from '../commands/ask-question.command';
 import { SearchMode } from '../../infrastructure/qdrant/rag-qdrant.service';
 import { IConfidencePort } from '../../domain/ports/confidence.port';
+import { LinkService } from './link.service';
 interface RetrieveInternalOptions extends Pick<AskQuestionOptions, 'useHybridSearch' | 'useReranking' | 'rerankStrategy' | 'useQueryTransformation' | 'useContextualCompression' | 'useConversationMemory' | 'sessionId' | 'scoreThreshold' | 'filters'> {
     limit?: number;
     _searchMode?: SearchMode | 'entity';
@@ -24,12 +25,13 @@ export declare class TextRagService implements TextRagPort {
     private readonly knowledgeGraph;
     private readonly logger;
     private readonly confidencePort;
+    private readonly linkService;
     private queryTransformer;
     private reranker;
     private hybridSearch;
     private contextualCompressor;
     private queryClassifier;
-    constructor(configService: ConfigService, ollama: OllamaService, qdrantService: RagQdrantService, textRepository: ITextDocumentRepository, conversationRepository: IConversationSessionRepository, knowledgeGraph: IKnowledgeGraphService, logger: LoggerPort, confidencePort: IConfidencePort);
+    constructor(configService: ConfigService, ollama: OllamaService, qdrantService: RagQdrantService, textRepository: ITextDocumentRepository, conversationRepository: IConversationSessionRepository, knowledgeGraph: IKnowledgeGraphService, logger: LoggerPort, confidencePort: IConfidencePort, linkService: LinkService);
     uploadKnowledgeFromFile(file: Express.Multer.File, options?: UploadFolderOptions): Promise<IUploadKnowledge>;
     uploadMarkdownFolder(files: Express.Multer.File[], options?: UploadFolderOptions): Promise<{
         totalChunks: number;

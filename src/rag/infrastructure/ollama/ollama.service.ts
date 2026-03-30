@@ -196,11 +196,10 @@ export class OllamaService {
     options: LLMOptions = {},
   ): AsyncGenerator<string> {
     const messages: Array<{ role: string; content: string }> = [];
-  
+
     if (options.systemPrompt) {
       messages.push({ role: 'system', content: options.systemPrompt });
     }
-  
     messages.push({ role: 'user', content: prompt });
   
     const requestBody: Record<string, any> = {
@@ -223,33 +222,28 @@ export class OllamaService {
       }
     });
   
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
-    }
+    const response = await axios.post(
+      `${this.baseURL}/api/chat`,
+      requestBody,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          ...this.getHeaders(),
+        },
+        responseType: 'stream',
+        timeout: this.timeout,
+        httpsAgent: new (require('https').Agent)({ keepAlive: true }),
+      },
+    );
   
-    const response = await fetch(`${this.baseURL}/api/chat`, {
-      method:  'POST',
-      headers,
-      body:    JSON.stringify(requestBody),
-      signal:  AbortSignal.timeout(this.timeout),
-    });
+    const stream: import('stream').Readable = response.data;
   
-    if (!response.ok || !response.body) {
-      throw new Error(`Ollama HTTP ${response.status}`);
-    }
-  
-    const reader  = response.body.getReader();
-    const decoder = new TextDecoder();
     let tail = '';
   
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-  
-      tail += decoder.decode(value, { stream: true });
+    for await (const chunk of stream) {
+      tail += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
   
       const lines = tail.split('\n');
       tail = lines.pop() ?? '';
@@ -263,6 +257,7 @@ export class OllamaService {
           }
           if (parsed.done) return;
         } catch {
+
         }
       }
     }

@@ -72,7 +72,7 @@ const PROFILE_BY_TYPE: Record<QueryType, FineTuningParams> = {
   },
   factual: {
     limit:                    15,
-    scoreThreshold:           0.9,
+    scoreThreshold:           0.85,
     searchMode:               'balanced',
     useHybridSearch:          true,
     useQueryTransformation:   true,
@@ -92,7 +92,7 @@ const PROFILE_BY_TYPE: Record<QueryType, FineTuningParams> = {
   },
   wide: {
     limit:                    12,
-    scoreThreshold:           0.62,
+    scoreThreshold:           0.72,
     searchMode:               'wide',
     useHybridSearch:          true,
     useQueryTransformation:   true,
@@ -124,7 +124,7 @@ function preGuardClassify(query: string): QueryType | null {
 
   // Strong signals that this is a WHY/WHAT/ORIGIN question about a name or company
   const isNameOriginQuery =
-    /\b(why|what|how)\b.{0,30}\b(name|called|named|mean|origin|history|founded|create)\b/i.test(q) ||
+    /\b(why|what|what is)\b.{0,30}\b(name|called|named|mean|origin|history|founded|create)\b/i.test(q) ||
     /\b(name|назв).{0,20}\b(company|компан|brand|бренд)\b/i.test(q) ||
     /\b(company|компан).{0,20}\b(name|назв|called|mean)\b/i.test(q);
 
@@ -132,7 +132,7 @@ function preGuardClassify(query: string): QueryType | null {
 
   // If query contains "tell me about / розкажи про" + non-person noun → wide
   const isAboutSomething =
-    /\b(tell me about|describe|overview of|what is|what are)\b/i.test(q) ||
+    /\b(tell me about|describe|overview of|what are)\b/i.test(q) ||
     /\b(розкажи|опиши|що таке|що це)\b/i.test(q);
 
   // Signals that subject is NOT a human (company / tool / process / department words)
@@ -148,7 +148,6 @@ export class QueryClassifier {
   constructor(private readonly ollama: OllamaService) {}
   async classify(query: string): Promise<QueryClassification> {
 
-    // Fast path: heuristic pre-guard (no LLM call needed)
     const preGuard = preGuardClassify(query);
     if (preGuard !== null) {
       return this.build(preGuard, 0.9);
@@ -177,7 +176,8 @@ TYPES:
                         "Коли заснована компанія?", "Як оплатити коворкінг з фоп?",
                         "А як тепер аппрувиться лікарняний?",
                         "why name company onix?", "what does the name onix mean?",
-                        "when was onix founded?", "why is the company called onix?"
+                        "when was onix founded?", "why is the company called onix?",
+                        "what is vacation policy on company?"
 
   "wide"    — comprehensive overview, listing, procedural, or comparative.
               Use for DEPARTMENT / TEAM / TOOL / PROCESS / COMPANY overviews, and step-by-step guides.

@@ -145,6 +145,7 @@ let OllamaService = class OllamaService {
     }
     async *getRagResponseByPromptStream(prompt, options = {}) {
         const messages = [];
+        console.log('here');
         if (options.systemPrompt) {
             messages.push({ role: 'system', content: options.systemPrompt });
         }
@@ -167,29 +168,21 @@ let OllamaService = class OllamaService {
                 delete requestBody.options[key];
             }
         });
-        const headers = {
-            'Content-Type': 'application/json',
-        };
-        if (this.apiKey) {
-            headers['Authorization'] = `Bearer ${this.apiKey}`;
-        }
-        const response = await fetch(`${this.baseURL}/api/chat`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(requestBody),
-            signal: AbortSignal.timeout(this.timeout),
+        const response = await axios_1.default.post(`${this.baseURL}/api/chat`, requestBody, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                ...this.getHeaders(),
+            },
+            responseType: 'stream',
+            timeout: this.timeout,
+            httpsAgent: new (require('https').Agent)({ keepAlive: true }),
         });
-        if (!response.ok || !response.body) {
-            throw new Error(`Ollama HTTP ${response.status}`);
-        }
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
+        const stream = response.data;
         let tail = '';
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done)
-                break;
-            tail += decoder.decode(value, { stream: true });
+        for await (const chunk of stream) {
+            tail += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
             const lines = tail.split('\n');
             tail = lines.pop() ?? '';
             for (const line of lines) {

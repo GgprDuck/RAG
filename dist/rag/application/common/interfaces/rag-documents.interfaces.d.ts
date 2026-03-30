@@ -45,6 +45,11 @@ export interface IGenerateAnswer {
         score?: number;
         metadata?: Record<string, any>;
     }>;
+    links?: Array<{
+        url: string;
+        label: string;
+        linkType: string;
+    }>;
 }
 export interface IUploadKnowledge {
     chunks: number;
@@ -55,10 +60,14 @@ export interface IDeleteDocument {
 }
 export type IStreamChunk = {
     event: 'metadata';
-    metadata: Partial<Omit<IGenerateAnswer, 'answer' | 'formattedAnswer' | 'sources'>>;
+    metadata: Partial<Omit<IGenerateAnswer, 'answer' | 'formattedAnswer' | 'sources' | 'links'>>;
 } | {
     event: 'sources';
     sources: NonNullable<IGenerateAnswer['sources']>;
+} | {
+    event: 'links';
+    links: NonNullable<IGenerateAnswer['links']>;
+    block: string;
 } | {
     event: 'token';
     token: string;

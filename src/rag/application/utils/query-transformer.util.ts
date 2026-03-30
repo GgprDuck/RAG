@@ -171,6 +171,7 @@ const SYNONYM_MAP: Record<string, string[]> = {
   'розробник':     ['developer', 'programmer', 'engineer'],
   'developer':     ['розробник', 'програміст'],
   'grow':          ['Employee growth process'],
+  'гроу':          ['Employee growth process'],
 };
 
 const EN_TO_UA_QUERY_PATTERNS: Array<[RegExp, string]> = [
@@ -215,6 +216,15 @@ const EN_TO_UA_QUERY_PATTERNS: Array<[RegExp, string]> = [
 
   [/wifi|wi-fi|wireless/i,             'wifi підключення пароль мережа'],
   [/(help.?desk|tech.?support|it.?support)/i, 'технічна підтримка help desk'],
+
+  [/vpn/i, 'vpn впн підключення налаштування доступ'],
+  [/(set.{0,5}up|configure|connect).{0,15}vpn/i, 'як підключитись до vpn впн налаштування'],
+  [/vpn.{0,15}(access|connection|setup|settings)/i, 'vpn впн підключення налаштування доступ'],
+  [/how.{0,15}(use|get|enable).{0,15}vpn/i, 'як підключитись до vpn впн'],
+  [/virtual.{0,10}private.{0,10}network/i, 'vpn впн віртуальна приватна мережа'],
+  // Generic IT:
+  [/(set.{0,5}up|configure|install).{0,20}(access|connection|network)/i, 'налаштування підключення доступ'],
+  [/how.{0,10}(to|do|can|).{0,10}(connect|access|login)/i, 'як підключитись увійти доступ'],
 ];
 
 function isEnglishQuery(query: string): boolean {
