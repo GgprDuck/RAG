@@ -15,8 +15,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LinkService = void 0;
 const common_1 = require("@nestjs/common");
 const p_limit_1 = require("p-limit");
-const redis_1 = require("@upstash/redis");
 const link_extractor_util_1 = require("../utils/link-extractor.util");
+const ioredis_1 = require("ioredis");
 const LINK_STOP = new Set([
     'де', 'як', 'що', 'який', 'яка', 'яке', 'які', 'чи', 'у', 'в',
     'до', 'від', 'із', 'зі', 'та', 'і', 'й', 'або', 'але', 'при',
@@ -96,9 +96,10 @@ function queryCacheKey(prefix, query) {
     return `${prefix}:${query.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 120)}`;
 }
 let LinkService = class LinkService {
-    constructor(repo, logger, redis) {
+    constructor(repo, logger, cache, redis) {
         this.repo = repo;
         this.logger = logger;
+        this.cache = cache;
         this.redis = redis;
     }
     async indexLinksFromFiles(files) {
@@ -271,40 +272,37 @@ let LinkService = class LinkService {
     }
     async redisGet(key) {
         try {
-            const raw = await this.redis.get(key);
-            return raw ?? null;
+            return await this.cache.get(key);
         }
         catch (err) {
-            this.logger.warn('LinkService: Redis get failed', { key, error: err?.message });
+            this.logger.warn('LinkService: cache get failed', {
+                key,
+                error: err?.message,
+            });
             return null;
         }
     }
     async redisSet(key, value, ttl) {
         try {
-            await this.redis.set(key, value, { ex: ttl });
+            await this.cache.set(key, value, ttl);
         }
         catch (err) {
-            this.logger.warn('LinkService: Redis set failed', { key, error: err?.message });
+            this.logger.warn('LinkService: cache set failed', {
+                key,
+                error: err?.message,
+            });
         }
     }
     async bustLinkCache() {
         try {
-            const patterns = ['rag:links-query:*', 'rag:links-ctx:*'];
-            for (const pattern of patterns) {
-                let cursor = '0';
-                do {
-                    const [nextCursor, keys] = await this.redis.scan(cursor, {
-                        match: pattern,
-                        count: 100,
-                    });
-                    if (keys.length)
-                        await this.redis.del(...keys);
-                } while (cursor !== '0');
-            }
+            await this.cache.deleteByPattern?.('links-query:*');
+            await this.cache.deleteByPattern?.('links-ctx:*');
             this.logger.log('LinkService: link cache busted');
         }
         catch (err) {
-            this.logger.warn('LinkService: cache bust failed', { error: err?.message });
+            this.logger.warn('LinkService: cache bust failed', {
+                error: err?.message,
+            });
         }
     }
 };
@@ -313,7 +311,8 @@ exports.LinkService = LinkService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, common_1.Inject)('IKnowledgeLinkRepository')),
     __param(1, (0, common_1.Inject)('LoggerPort')),
-    __param(2, (0, common_1.Inject)('REDIS_CLIENT')),
-    __metadata("design:paramtypes", [Object, Object, redis_1.Redis])
+    __param(2, (0, common_1.Inject)('CachePort')),
+    __param(3, (0, common_1.Inject)('REDIS_CLIENT')),
+    __metadata("design:paramtypes", [Object, Object, Object, ioredis_1.default])
 ], LinkService);
 //# sourceMappingURL=link.service.js.map

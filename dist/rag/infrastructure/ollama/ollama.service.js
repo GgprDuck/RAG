@@ -18,7 +18,6 @@ const config_1 = require("@nestjs/config");
 const axios_1 = require("axios");
 const axios_retry_1 = require("axios-retry");
 const crypto_1 = require("crypto");
-const redis_1 = require("@upstash/redis");
 const rag_config_1 = require("../config/rag-config");
 (0, axios_retry_1.default)(axios_1.default, {
     retries: 3,
@@ -29,10 +28,10 @@ const rag_config_1 = require("../config/rag-config");
 });
 const EMBED_TTL_SECONDS = 60 * 60 * 24;
 let OllamaService = class OllamaService {
-    constructor(configService, logger, redis) {
+    constructor(configService, logger, cache) {
         this.configService = configService;
         this.logger = logger;
-        this.redis = redis;
+        this.cache = cache;
         this.timeout = 6000_000;
         this.visionTimeout = 120_000;
         const ragConfig = this.configService.get(rag_config_1.RAG_CONFIG);
@@ -57,7 +56,7 @@ let OllamaService = class OllamaService {
             .update(`${this.textEmbedModel}:${safePrompt}`)
             .digest('hex')}`;
         try {
-            const cached = await this.redis.get(cacheKey);
+            const cached = await this.cache.get(cacheKey);
             if (cached) {
                 return cached;
             }
@@ -73,7 +72,8 @@ let OllamaService = class OllamaService {
                 return null;
             }
             try {
-                await this.redis.set(cacheKey, JSON.stringify(embedding), { ex: EMBED_TTL_SECONDS });
+                const value = JSON.stringify(embedding);
+                await this.cache.set(cacheKey, value, EMBED_TTL_SECONDS);
             }
             catch (err) {
                 this.logger.warn('embed: Redis set failed', { error: err?.message });
@@ -258,7 +258,7 @@ exports.OllamaService = OllamaService;
 exports.OllamaService = OllamaService = __decorate([
     (0, common_1.Injectable)(),
     __param(1, (0, common_1.Inject)('LoggerPort')),
-    __param(2, (0, common_1.Inject)('REDIS_CLIENT')),
-    __metadata("design:paramtypes", [config_1.ConfigService, Object, redis_1.Redis])
+    __param(2, (0, common_1.Inject)('CachePort')),
+    __metadata("design:paramtypes", [config_1.ConfigService, Object, Object])
 ], OllamaService);
 //# sourceMappingURL=ollama.service.js.map

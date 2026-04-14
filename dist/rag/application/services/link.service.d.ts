@@ -1,6 +1,7 @@
-import { Redis } from "@upstash/redis";
 import { LoggerPort } from "../../shared/application/ports/logger.port";
 import { IKnowledgeLink, IKnowledgeLinkRepository } from "../../domain/interfaces/knowledge-link.interface";
+import { CachePort } from "../../domain/ports/cache.port";
+import Redis from 'ioredis';
 export interface LinkSearchResult {
     found: boolean;
     links: IKnowledgeLink[];
@@ -9,8 +10,9 @@ export interface LinkSearchResult {
 export declare class LinkService {
     private readonly repo;
     private readonly logger;
+    private readonly cache;
     private readonly redis;
-    constructor(repo: IKnowledgeLinkRepository, logger: LoggerPort, redis: Redis);
+    constructor(repo: IKnowledgeLinkRepository, logger: LoggerPort, cache: CachePort, redis: Redis);
     indexLinksFromFiles(files: Array<{
         originalname: string;
         buffer: Buffer;

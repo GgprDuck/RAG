@@ -55,6 +55,7 @@ const knowledge_link_prisma_repository_1 = require("./domain/repositories/knowle
 const link_controller_1 = require("./presentation/controllers/link.controller");
 const extract_links_handler_1 = require("./application/handlers/extract-links.handler");
 const extract_links_command_1 = require("./application/commands/extract-links.command");
+const cache_module_1 = require("./infrastructure/redis/cache.module");
 let RagModule = class RagModule {
     constructor(bus, askQuestion, uploadKnowledge, deleteDocument, processImages, deleteImage, uploadFolder, getAllDocuments, getAllImages, getImagesByKeyword, retrieveDocuments, extractLinks) {
         this.bus = bus;
@@ -96,6 +97,7 @@ exports.RagModule = RagModule = __decorate([
             prisma_module_1.PrismaModule,
             neo4j_module_1.Neo4jModule,
             command_bus_module_1.RagCommandBusModule,
+            cache_module_1.CacheModule,
         ],
         providers: [
             { provide: 'LoggerPort', useClass: console_logger_adapter_1.ConsoleLoggerAdapter },

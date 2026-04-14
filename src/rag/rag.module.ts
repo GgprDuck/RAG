@@ -51,17 +51,19 @@ import { KnowledgeLinkPrismaRepository } from './domain/repositories/knowledge-l
 import { LinksController } from './presentation/controllers/link.controller';
 import { ExtractLinksHandler } from './application/handlers/extract-links.handler';
 import { IndexLinksCommand } from './application/commands/extract-links.command';
+import { CacheModule } from './infrastructure/redis/cache.module';
 
 @Module({
   imports: [
     ConfigModule.forFeature(ragConfig),
-    RedisModule,   // <— gives REDIS_CLIENT to every provider in this module + @Global makes it available in OllamaModule/PrismaModule too
+    RedisModule,
     OllamaModule,
     S3Module,
     QdrantModule,
     PrismaModule,
     Neo4jModule,
     RagCommandBusModule,
+    CacheModule,
   ],
   providers: [
     { provide: 'LoggerPort',               useClass: ConsoleLoggerAdapter },

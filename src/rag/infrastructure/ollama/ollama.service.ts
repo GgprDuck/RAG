@@ -9,6 +9,7 @@ import {
   TRagConfig,
 } from 'src/rag/infrastructure/config/rag-config';
 import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { CachePort } from 'src/rag/domain/ports/cache.port';
 
 axiosRetry(axios, {
   retries: 3,
@@ -45,7 +46,7 @@ export class OllamaService {
   constructor(
     private readonly configService: ConfigService,
     @Inject('LoggerPort') private readonly logger: LoggerPort,
-    @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    @Inject('CachePort') private readonly cache: CachePort,
   ) {
     const ragConfig = this.configService.get<TRagConfig>(RAG_CONFIG);
 
@@ -77,8 +78,7 @@ export class OllamaService {
       .digest('hex')}`;
 
     try {
-      const cached = await this.redis.get<number[]>(cacheKey);
-
+      const cached = await this.cache.get<number[]>(cacheKey);
       if (cached) {
         return cached;
       }
@@ -101,11 +101,14 @@ export class OllamaService {
       }
 
       try {
-        await this.redis.set(
+        const value = JSON.stringify(embedding);
+      
+        await this.cache.set(
           cacheKey,
-          JSON.stringify(embedding),
-          { ex: EMBED_TTL_SECONDS }
+          value,
+          EMBED_TTL_SECONDS,
         );
+
       } catch (err: any) {
         this.logger.warn('embed: Redis set failed', { error: err?.message });
       }

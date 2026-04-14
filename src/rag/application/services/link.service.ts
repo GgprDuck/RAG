@@ -1,7 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
 import pLimit from 'p-limit';
-import { Redis } from "@upstash/redis"
-
 import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
 import {
   IKnowledgeLink,
@@ -12,6 +10,8 @@ import {
   isLinkQuery,
   isValidUrl,
 } from '../utils/link-extractor.util';
+import { CachePort } from 'src/rag/domain/ports/cache.port';
+import Redis from 'ioredis';
 
 export interface LinkSearchResult {
   found: boolean;
@@ -114,6 +114,8 @@ export class LinkService {
     private readonly repo: IKnowledgeLinkRepository,
     @Inject('LoggerPort')
     private readonly logger: LoggerPort,
+    @Inject('CachePort')
+    private readonly cache: CachePort,  
     @Inject('REDIS_CLIENT')
     private readonly redis: Redis,
   ) {}
@@ -330,43 +332,37 @@ export class LinkService {
 
   private async redisGet<T>(key: string): Promise<T | null> {
     try {
-      const raw = await this.redis.get<T>(key);
-
-      return raw ?? null;
+      return await this.cache.get<T>(key);
     } catch (err: any) {
-      this.logger.warn('LinkService: Redis get failed', { key, error: err?.message });
+      this.logger.warn('LinkService: cache get failed', {
+        key,
+        error: err?.message,
+      });
       return null;
     }
   }
 
   private async redisSet(key: string, value: unknown, ttl: number): Promise<void> {
     try {
-      await this.redis.set(
-        key,
-        value,
-        { ex: ttl }
-      );
+      await this.cache.set(key, value, ttl);
     } catch (err: any) {
-      this.logger.warn('LinkService: Redis set failed', { key, error: err?.message });
+      this.logger.warn('LinkService: cache set failed', {
+        key,
+        error: err?.message,
+      });
     }
   }
 
   private async bustLinkCache(): Promise<void> {
     try {
-      const patterns = ['rag:links-query:*', 'rag:links-ctx:*'];
-      for (const pattern of patterns) {
-        let cursor = '0';
-        do {
-          const [nextCursor, keys] = await this.redis.scan(cursor, {
-            match: pattern,
-            count: 100,
-          });
-          if (keys.length) await this.redis.del(...keys);
-        } while (cursor !== '0');
-      }
+      await this.cache.deleteByPattern?.('links-query:*');
+      await this.cache.deleteByPattern?.('links-ctx:*');
+  
       this.logger.log('LinkService: link cache busted');
     } catch (err: any) {
-      this.logger.warn('LinkService: cache bust failed', { error: err?.message });
+      this.logger.warn('LinkService: cache bust failed', {
+        error: err?.message,
+      });
     }
   }
 }

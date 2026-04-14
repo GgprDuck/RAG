@@ -11,12 +11,16 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const ollama_service_1 = require("./ollama.service");
 const console_logger_adapter_1 = require("../../shared/application/ports/console.logger.adapter");
+const cache_module_1 = require("../redis/cache.module");
 let OllamaModule = class OllamaModule {
 };
 exports.OllamaModule = OllamaModule;
 exports.OllamaModule = OllamaModule = __decorate([
     (0, common_1.Module)({
-        imports: [config_1.ConfigModule],
+        imports: [
+            config_1.ConfigModule,
+            cache_module_1.CacheModule,
+        ],
         providers: [
             ollama_service_1.OllamaService,
             {
