@@ -45,7 +45,9 @@ export function latinToCyrillicBestEffort(text: string): string {
   ];
   let r = text.toLowerCase();
   for (const [re, cyr] of steps) r = r.replace(re, cyr);
-  return r;
+  
+  
+  return r.replace(/[a-z]/g, '');
 }
 
 export function generateNameVariants(token: string): string[] {
@@ -143,10 +145,7 @@ const QUESTION_STOP_WORDS = new Set([
   'mongodb', 'postgres', 'redis', 'nginx', 'kubernetes', 'terraform',
 ]);
 
-/**
- * Non-person context words: if any of these appear in the query, the
- * capitalised token is likely a company / product / tool name — NOT a human.
- */
+
 const NON_PERSON_CONTEXT = new Set([
   'company', 'компанія', 'компанії', 'компанію', 'компанієї',
   'name', 'назва', 'назви', 'назву', 'named', 'called',
@@ -154,24 +153,12 @@ const NON_PERSON_CONTEXT = new Set([
   'platform', 'платформа', 'system', 'систем', 'academy', 'академі',
   'department', 'відділ', 'департамент', 'team', 'команд',
   'origin', 'history', 'meaning', 'founded', 'заснування',
-  'onix', // always treat "Onix" as a non-person subject
+  'onix', 
 ]);
 
-export function isEntityQuery(query: string): boolean {
-  const trimmed = query.trim();
-  if (trimmed.length > 80) return false;
-  const tokens = trimmed.split(/\s+/);
-  if (tokens.length > 5) return false;
 
-  // If the query contains non-person context words → not an entity (human) query
-  const lowerTokens = tokens.map(t => t.toLowerCase().replace(/[?!.,;:]/g, ''));
-  const hasNonPersonContext = lowerTokens.some(t => NON_PERSON_CONTEXT.has(t));
-  if (hasNonPersonContext) return false;
-
-  const nameTokens = tokens.filter(
-    t => /^[А-ЯІЇЄҐA-Z]/u.test(t) && !QUESTION_STOP_WORDS.has(t.toLowerCase()),
-  );
-  return nameTokens.length >= 1;
+export function isEntityQuery(_query: string): boolean {
+  return false;
 }
 
 export function extractQueryNameVariants(query: string): string[] {

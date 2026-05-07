@@ -6,6 +6,7 @@ import {
   ConversationTurn,
 } from 'src/rag/domain/ports/conversation-session.repository.port';
 import { v4 as uuidv4 } from 'uuid';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
 
 const HISTORY_TTL_SECONDS = 60 * 60 * 24;
 
@@ -16,6 +17,7 @@ export class ConversationSessionPrismaRepository
   constructor(
     private readonly prisma: PrismaService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    @Inject('LoggerPort') private readonly logger: LoggerPort,
   ) {}
 
   async addTurn(
@@ -47,17 +49,11 @@ export class ConversationSessionPrismaRepository
       const cached = await this.redis.get(cacheKey);
 
       if (cached) {
-        const parsed = JSON.parse(cached) as Array<{
-          query: string;
-          answer: string;
-          timestamp: string;
-          embedding?: number[];
-        }>;
-
-        return parsed.map(t => ({ ...t, timestamp: new Date(t.timestamp) }));
+        return JSON.parse(cached) as Array<ConversationTurn>;
       }
     } catch (err: any) {
-
+      this.logger.error('getHistory: Redis get failed', { error: err?.message });
+      return [];
     }
 
     const sessions = await this.prisma.conversationSession.findMany({

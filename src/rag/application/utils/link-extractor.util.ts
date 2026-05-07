@@ -74,7 +74,7 @@ function extractContext(text: string, matchIndex: number, maxChars = 300): strin
     start = prev;
   }
 
-  // Walk forward to the nearest blank line (paragraph end)
+  
   let end = matchIndex;
   while (end < text.length) {
     const next = text.indexOf('\n', end + 1);
@@ -89,14 +89,14 @@ function extractContext(text: string, matchIndex: number, maxChars = 300): strin
     return paragraph.slice(0, maxChars);
   }
 
-  // Fallback: symmetric character window
+  
   const wStart = Math.max(0, matchIndex - maxChars / 2);
   const wEnd   = Math.min(text.length, matchIndex + maxChars / 2);
   return text.slice(wStart, wEnd).replace(/\s+/g, ' ').trim();
 }
 
-// ─── Keyword extraction ───────────────────────────────────────────────────────
-// Sources: label tokens + URL hostname/path tokens + high-frequency context tokens.
+
+
 
 function tokenize(text: string): string[] {
   return text
@@ -115,10 +115,10 @@ function buildKeywords(label: string, url: string, context: string): string[] {
     for (const v of (ABBR_VARIANTS[w] ?? [])) kws.add(v);
   };
 
-  // 1. Label tokens — highest signal (user-authored text)
+  
   tokenize(label).forEach(addWithVariants);
 
-  // 2. URL hostname + meaningful pathname segments
+  
   try {
     const TLD    = new Set(['com', 'ua', 'net', 'org', 'io', 'co', 'app', 'dev', 'www']);
     const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
@@ -134,7 +134,7 @@ function buildKeywords(label: string, url: string, context: string): string[] {
       .map(p => p.toLowerCase())
       .forEach(p => addWithVariants(p));
   } catch {
-    // Relative URL — extract tokens from the raw string
+    
     url
       .split(/[/\-_?&#=+.]/)
       .filter(p => p.length > 2 && !/^\d+$/.test(p))
@@ -142,7 +142,7 @@ function buildKeywords(label: string, url: string, context: string): string[] {
       .forEach(p => addWithVariants(p));
   }
 
-  // 3. High-frequency context tokens not yet covered (up to 15 extra)
+  
   const contextTokens = tokenize(context).filter(w => !kws.has(w));
   const freq          = new Map<string, number>();
   for (const w of contextTokens) freq.set(w, (freq.get(w) ?? 0) + 1);
@@ -154,22 +154,22 @@ function buildKeywords(label: string, url: string, context: string): string[] {
   return [...kws].slice(0, 50);
 }
 
-// ─── Main extractor ───────────────────────────────────────────────────────────
+
 
 export function extractLinksFromMarkdown(
   content: string,
   sourceFile: string,
 ): Omit<IKnowledgeLink, 'id' | 'createdAt' | 'updatedAt'>[] {
-  // Deduplicate by URL only — if the same URL appears with multiple labels,
-  // keep the entry whose label is the most descriptive (longest non-URL string).
+  
+  
   const results = new Map<string, Omit<IKnowledgeLink, 'id' | 'createdAt' | 'updatedAt'>>();
 
   const add = (rawUrl: string, rawLabel: string, matchIndex: number) => {
     const url = rawUrl.trim();
     if (!url || url.startsWith('#') || url.startsWith('mailto:')) return;
 
-    // NOTE: relative/internal URLs are stored as-is.
-    // isValidUrl() is applied only when serving results to users.
+    
+    
     const label    = (rawLabel.trim() && rawLabel.trim() !== url) ? rawLabel.trim() : '';
     const existing = results.get(url);
 
@@ -205,7 +205,7 @@ export function extractLinksFromMarkdown(
   return [...results.values()];
 }
 
-// ─── Query classifier ─────────────────────────────────────────────────────────
+
 
 export function isLinkQuery(query: string): boolean {
   const q = query.toLowerCase();

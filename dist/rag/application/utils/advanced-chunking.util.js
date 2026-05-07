@@ -17,7 +17,7 @@ function splitIntoSentences(text) {
     const raw = protected_.match(/[^.!?…]+[.!?…]+(?:\s|$)/g) || [text];
     return raw.map((s) => s.replace(/\x00/g, '.').trim()).filter(Boolean);
 }
-async function semanticChunking(text, ollamaService, options = {}) {
+async function semanticChunking(text, embedding, options = {}) {
     const { minChunkSize = 100, maxChunkSize = 500, similarityThreshold = 0.7 } = options;
     const sentences = splitIntoSentences(text);
     if (!sentences.length)
@@ -35,7 +35,7 @@ async function semanticChunking(text, ollamaService, options = {}) {
     const embeddings = [];
     for (let i = 0; i < sentences.length; i += BATCH) {
         const batch = sentences.slice(i, i + BATCH);
-        const res = await Promise.all(batch.map((s) => ollamaService.embed(s.trim()).catch(() => null)));
+        const res = await Promise.all(batch.map((s) => embedding.embed(s.trim()).catch(() => null)));
         embeddings.push(...res);
         if (global.gc && i > 0 && i % (BATCH * 5) === 0)
             global.gc();

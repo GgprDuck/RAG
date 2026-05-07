@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+import { IEmbeddingPort } from 'src/rag/domain/ports/embedding.port';
 
 const logger = new Logger('Chunking');
 
@@ -38,7 +38,7 @@ export function splitIntoSentences(text: string): string[] {
 
 export async function semanticChunking(
   text: string,
-  ollamaService: OllamaService,
+  embedding: IEmbeddingPort,
   options: {
     minChunkSize?: number;
     maxChunkSize?: number;
@@ -64,7 +64,7 @@ export async function semanticChunking(
   const embeddings: (number[] | null)[] = [];
   for (let i = 0; i < sentences.length; i += BATCH) {
     const batch = sentences.slice(i, i + BATCH);
-    const res = await Promise.all(batch.map((s) => ollamaService.embed(s.trim()).catch(() => null)));
+    const res = await Promise.all(batch.map((s) => embedding.embed(s.trim()).catch(() => null)));
     embeddings.push(...res);
     if (global.gc && i > 0 && i % (BATCH * 5) === 0) global.gc();
   }

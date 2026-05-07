@@ -142,8 +142,40 @@ const SYNONYM_MAP = {
     'typescript': ['ts', 'javascript'],
     'розробник': ['developer', 'programmer', 'engineer'],
     'developer': ['розробник', 'програміст'],
-    'grow': ['Employee growth process'],
-    'гроу': ['Employee growth process'],
+    'grow': [
+        'Employee growth process',
+        'grow system',
+        'grow framework',
+        'competency development',
+        'employee competency matrix',
+        'career growth',
+        'review interview',
+        'approve decline',
+        'set next goal',
+        'система grow',
+        'система розвитку компетенцій',
+        'рівні компетенцій',
+        'кар\'єрний розвиток',
+        'рев\'ю співробітника',
+        'підтвердження знань',
+    ],
+    'гроу': [
+        'Employee growth process',
+        'grow system',
+        'grow framework',
+        'competency development',
+        'employee competency matrix',
+        'career growth',
+        'review interview',
+        'approve decline',
+        'set next goal',
+        'система grow',
+        'система розвитку компетенцій',
+        'рівні компетенцій',
+        'кар\'єрний розвиток',
+        'рев\'ю співробітника',
+        'підтвердження знань',
+    ],
 };
 const EN_TO_UA_QUERY_PATTERNS = [
     [/why.{0,20}(name|called|named).{0,20}company/i, 'Розкажи історію назви компанії'],
@@ -238,12 +270,13 @@ function expandWithSynonyms(query) {
 }
 const TRANSFORM_TTL_SECONDS = 60 * 60 * 2;
 class QueryTransformer {
-    constructor(ollamaService, redis) {
-        this.ollamaService = ollamaService;
+    constructor(chatLlm, redis) {
+        this.chatLlm = chatLlm;
         this.redis = redis;
     }
-    async transformQuery(query) {
-        const cacheKey = `transform:${query.trim().toLowerCase().slice(0, 120)}`;
+    async transformQuery(query, isEntityOverride) {
+        const entity = isEntityOverride ?? false;
+        const cacheKey = `transform:${entity ? 'e:' : ''}${query.trim().toLowerCase().slice(0, 120)}`;
         if (this.redis) {
             try {
                 const cached = await this.redis.get(cacheKey);
@@ -252,7 +285,6 @@ class QueryTransformer {
             }
             catch { }
         }
-        const entity = (0, transliteration_util_1.isEntityQuery)(query);
         const [expanded, rephrased, keywords] = await Promise.all([
             this.expandQuery(query, entity),
             this.rephraseQuery(query, entity),
@@ -295,7 +327,7 @@ class QueryTransformer {
             `and alternative phrasings.\n` +
             `Format: one query per line, no numbers or bullets.`;
         try {
-            const response = await this.ollamaService.getRagResponseByPrompt(prompt);
+            const response = await this.chatLlm.complete(prompt);
             return response
                 .split('\n')
                 .map(l => l.trim())
@@ -316,7 +348,7 @@ class QueryTransformer {
             `Provide only the rephrased questions, one per line, no numbers.` +
             `Translate text to ukrainian`;
         try {
-            const response = await this.ollamaService.getRagResponseByPrompt(prompt);
+            const response = await this.chatLlm.complete(prompt);
             return response
                 .split('\n')
                 .map(l => l.trim())
@@ -337,7 +369,7 @@ class QueryTransformer {
             `List only the keywords separated by commas. ` +
             `Do NOT translate or modify proper names.`;
         try {
-            const response = await this.ollamaService.getRagResponseByPrompt(prompt);
+            const response = await this.chatLlm.complete(prompt);
             const llmKeywords = response
                 .split(',')
                 .map(kw => kw.trim().toLowerCase())

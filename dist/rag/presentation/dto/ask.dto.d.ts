@@ -9,15 +9,19 @@ export declare class ConversationMessage {
 }
 export declare class MetadataFilter {
     field: string;
+    value: unknown;
     operator?: 'eq' | 'ne' | 'gt' | 'lt' | 'gte' | 'lte' | 'in';
 }
 export declare class AdvancedRagOptionsDto {
     useHybridSearch?: boolean;
     useReranking?: boolean;
+    rerankStrategy?: RerankStrategy;
     useQueryTransformation?: boolean;
     useContextualCompression?: boolean;
     useConversationMemory?: boolean;
     useCitationTracking?: boolean;
+    includeRetrievalDiagnostics?: boolean;
+    useAnswerCache?: boolean;
     useKnowledgeGraph?: boolean;
     sessionId?: string;
 }

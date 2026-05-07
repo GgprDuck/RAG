@@ -1,22 +1,7 @@
-export interface IDocumentWithEmbedding {
-  id: string;
-  text: string;
-  embedding: number[];
-  createdAt: string;
-  model: string;
-  score?: number;
-  metadata?: Record<string, any>;
-  parentId?: string;
-  parentText?: string;
-}
-
-export interface IDocumentWithoutEmbedding {
-  id: string;
-  text: string;
-  createdAt: string;
-  model: string;
-  metadata?: Record<string, any>;
-}
+export type {
+  IDocumentWithEmbedding,
+  IDocumentWithoutEmbedding,
+} from 'src/rag/domain/interfaces/rag-document-readmodels.interface';
 
 export interface ICitation {
   id: string;
@@ -49,6 +34,17 @@ export interface IGenerateAnswer {
     metadata?: Record<string, any>;
   }>;
   links?: Array<{ url: string; label: string; linkType: string }>;
+  retrievalDiagnostics?: {
+    effectiveLimit?: number;
+    preFilterCount?: number;
+    postFilterCount?: number;
+    finalCount?: number;
+    searchMode?: 'precise' | 'wide' | 'balanced' | 'entity';
+    hybridEnabled?: boolean;
+    rerankEnabled?: boolean;
+    contextualCompressionEnabled?: boolean;
+    cacheHit?: boolean;
+  };
 }
 
 export interface IUploadKnowledge {

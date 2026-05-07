@@ -1,16 +1,12 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Redis } from "@upstash/redis"
 import { v4 as uuidv4 } from 'uuid';
-import { OllamaService } from 'src/rag/infrastructure/ollama/ollama.service';
-import { RagQdrantService } from 'src/rag/infrastructure/qdrant/rag-qdrant.service';
 import { ITextDocumentRepository } from '../../domain/repositories/text-document.repository';
 import { TextDocument } from '../../domain/entities/text-document.entity';
 import { Embedding } from '../../domain/value-objects/embedding.vo';
 import { chunkTextBySentences } from '../utils/text-chunk.util';
 import { extractEmbedding } from '../utils/embedding.util';
 import { extractFileText } from '../utils/file-text.util';
-import { RAG_CONFIG, TRagConfig } from '../../infrastructure/config/rag-config';
 import {
   IDeleteDocument,
   IDocumentWithEmbedding,
@@ -29,25 +25,29 @@ import {
 } from '../utils/advanced-chunking.util';
 import { QueryTransformer, translateQueryToUkrainian } from '../utils/query-transformer.util';
 import { Reranker } from '../utils/reranker.util';
-import { HybridSearchEngine, HybridSearchResult } from '../utils/hybrid-search.util';
+import { HybridSearchEngine, HybridSearchResult, SearchMode } from '../utils/hybrid-search.util';
 import { ContextualCompressor } from '../utils/contextual-compression.util';
 import {
-  IKnowledgeGraphService,
+  IKnowledgeGraphPort,
   KnowledgeGraphEntity,
-} from '../../infrastructure/neo4j/neo4j-knowledge-graph.service';
+} from 'src/rag/domain/ports/knowledge-graph.port';
 import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
 import { IConversationSessionRepository } from 'src/rag/domain/ports/conversation-session.repository.port';
 import { AskQuestionOptions } from '../commands/ask-question.command';
 import {
-  isEntityQuery,
   enrichKeywordsWithVariants,
   generateNameVariants,
   cyrillicToLatin,
 } from '../utils/transliteration.util';
-import { SearchMode } from '../../infrastructure/qdrant/rag-qdrant.service';
 import { QueryClassifier, FineTuningParams, QueryClassification } from '../utils/query-classefire.util';
 import { IConfidencePort } from '../../domain/ports/confidence.port';
 import { LinkService } from './link.service';
+import { CachePort } from 'src/rag/domain/ports/cache.port';
+import { IEmbeddingPort } from 'src/rag/domain/ports/embedding.port';
+import { IChatLlmPort } from 'src/rag/domain/ports/chat-llm.port';
+import type { ITextVectorSearchPort } from 'src/rag/domain/ports/text-vector-search.port';
+import type { IRagSettingsPort } from 'src/rag/domain/ports/rag-settings.port';
+import type { IRagContextFormattingPort } from 'src/rag/domain/ports/rag-context-formatting.port';
 
 const MIN_CHUNK_TEXT_LENGTH = 80;
 const UPLOAD_CONCURRENCY    = 3;
@@ -55,6 +55,7 @@ const EMBED_BATCH_SIZE      = 10;
 const MAX_CONTEXT_CHARS     = 6000;
 
 const RRF_K = 60;
+const ANSWER_CACHE_TTL_SEC = 60 * 3;
 
 const KEYWORD_STOP_WORDS = new Set([
   'what', 'is', 'are', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for',
@@ -67,9 +68,6 @@ const KEYWORD_STOP_WORDS = new Set([
 ]);
 
 const FACTUAL_SCORE_THRESHOLD_CAP = 0.65;
-
-// Max classification cache entries before LRU eviction
-const CLASSIFICATION_CACHE_MAX = 500;
 
 interface TrackCitation {
   id: string;
@@ -92,14 +90,23 @@ interface RetrieveInternalOptions extends Pick<
   limit?: number;
   _searchMode?: SearchMode | 'entity';
 }
-
-// Returned by prepareGenerationContext on success
 interface PreparedContext {
   classification: QueryClassification;
   p: FineTuningParams;
   retrieved: IDocumentWithEmbedding[];
   prompt: string;
   generationParams: GenerationParams;
+  retrievalDiagnostics: {
+    effectiveLimit: number;
+    preFilterCount: number;
+    postFilterCount: number;
+    finalCount: number;
+    searchMode: SearchMode | 'entity';
+    hybridEnabled: boolean;
+    rerankEnabled: boolean;
+    contextualCompressionEnabled: boolean;
+    cacheHit?: boolean;
+  };
 }
 
 interface GenerationParams {
@@ -109,6 +116,12 @@ interface GenerationParams {
   maxTokens: number;
   repeatPenalty: number | undefined;
   seed: number | undefined;
+}
+
+interface MetadataFilterInput {
+  field: string;
+  value: unknown;
+  operator?: string;
 }
 
 function reciprocalRankFusion(
@@ -133,42 +146,45 @@ export class TextRagService implements TextRagPort {
   private contextualCompressor: ContextualCompressor;
   private queryClassifier: QueryClassifier;
 
-  // ── Classification cache (LRU-lite: evict oldest when full) ──────────────
-  private readonly classificationCache = new Map<string, QueryClassification>();
-
   constructor(
-    private readonly configService: ConfigService,
-    private readonly ollama: OllamaService,
-    private readonly qdrantService: RagQdrantService,
+    @Inject('ITextVectorSearchPort')
+    private readonly vectorSearch: ITextVectorSearchPort,
+    @Inject('IRagSettingsPort')
+    private readonly ragSettings: IRagSettingsPort,
     @Inject('ITextDocumentRepository')
     private readonly textRepository: ITextDocumentRepository,
     @Inject('IConversationSessionRepository')
     private readonly conversationRepository: IConversationSessionRepository,
     @Inject('IKnowledgeGraphPort')
-    private readonly knowledgeGraph: IKnowledgeGraphService,
+    private readonly knowledgeGraph: IKnowledgeGraphPort,
     @Inject('LoggerPort')
     private readonly logger: LoggerPort,
     @Inject('IConfidencePort')
     private readonly confidencePort: IConfidencePort,
+    @Inject('IEmbeddingPort')
+    private readonly embeddingPort: IEmbeddingPort,
+    @Inject('IChatLlmPort')
+    private readonly chatLlmPort: IChatLlmPort,
     private readonly linkService: LinkService,
+    @Inject('IRagContextFormattingPort')
+    private readonly ragContextFormatting: IRagContextFormattingPort,
     @Inject('REDIS_CLIENT')
     private readonly redis: Redis,
+    @Inject('CachePort')
+    private readonly cache: CachePort,
   ) {
-    this.queryTransformer     = new QueryTransformer(this.ollama, this.redis);
-    this.reranker             = new Reranker(this.ollama);
-    this.hybridSearch         = new HybridSearchEngine(this.qdrantService, this.configService);
-    this.contextualCompressor = new ContextualCompressor(this.ollama);
-    this.queryClassifier      = new QueryClassifier(this.ollama);
+    this.queryTransformer     = new QueryTransformer(this.chatLlmPort, this.redis);
+    this.reranker             = new Reranker(this.chatLlmPort, this.embeddingPort);
+    this.hybridSearch         = new HybridSearchEngine(this.vectorSearch, this.logger);
+    this.contextualCompressor = new ContextualCompressor(this.embeddingPort, this.chatLlmPort);
+    this.queryClassifier      = new QueryClassifier(this.chatLlmPort);
   }
-
-  // ── Upload ────────────────────────────────────────────────────────────────
 
   async uploadKnowledgeFromFile(
     file: Express.Multer.File,
     options?: UploadFolderOptions,
   ): Promise<IUploadKnowledge> {
-    const ragConfig  = this.configService.get<TRagConfig>(RAG_CONFIG);
-    const embedModel = ragConfig?.ollamaEmbedModelText || 'nomic-embed-text';
+    const { ollamaEmbedModelText: embedModel } = this.ragSettings.get();
     const {
       chunkingStrategy     = 'simple',
       enableKnowledgeGraph = false,
@@ -244,7 +260,7 @@ export class TextRagService implements TextRagPort {
   }
 
   private async uploadWithSemantic(text: string, embedModel: string): Promise<number> {
-    const semanticChunks = await semanticChunking(text, this.ollama, {
+    const semanticChunks = await semanticChunking(text, this.embeddingPort, {
       minChunkSize: 100,
       maxChunkSize: 500,
     });
@@ -261,8 +277,7 @@ export class TextRagService implements TextRagPort {
     embedModel: string,
     options?: UploadFolderOptions,
   ): Promise<number> {
-    const ragConfig  = this.configService.get<TRagConfig>(RAG_CONFIG);
-    const vectorSize = ragConfig?.textRagVectorSize ?? 768;
+    const { textRagVectorSize: vectorSize } = this.ragSettings.get();
     const pcOpts     = options?.parentChild ?? {};
     const fileId     = this.buildFileId(file.originalname);
 
@@ -332,7 +347,7 @@ export class TextRagService implements TextRagPort {
 
     for (let i = 0; i < validChildren.length; i += EMBED_BATCH_SIZE) {
       const batch      = validChildren.slice(i, i + EMBED_BATCH_SIZE);
-      const embeddings = await Promise.all(batch.map(c => this.ollama.embed(c.text)));
+      const embeddings = await Promise.all(batch.map(c => this.embeddingPort.embed(c.text)));
 
       const docs = batch.map((chunk, idx) =>
         TextDocument.create(
@@ -500,7 +515,7 @@ export class TextRagService implements TextRagPort {
         `Example: react, frontend, компоненти, components, state, стан\n\n` +
         `Text:\n${sample}\n\nKeywords:`;
 
-      const response = await this.ollama.getRagResponseByPrompt(prompt, {
+      const response = await this.chatLlmPort.complete(prompt, {
         temperature: 0.2, maxTokens: 150,
       });
 
@@ -550,7 +565,7 @@ export class TextRagService implements TextRagPort {
     const documents: TextDocument[] = [];
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch      = chunks.slice(i, Math.min(i + batchSize, chunks.length));
-      const embeddings = await Promise.all(batch.map(c => this.ollama.embed(c)));
+      const embeddings = await Promise.all(batch.map(c => this.embeddingPort.embed(c)));
       const batchDocs  = batch.map((chunk, idx) =>
         TextDocument.create(
           uuidv4(), chunk, extractEmbedding(embeddings[idx]), embedModel, new Date(),
@@ -572,9 +587,9 @@ export class TextRagService implements TextRagPort {
 
   private async classifyQuery(query: string): Promise<QueryClassification> {
     const key = `classification:${query.trim().toLowerCase().slice(0, 120)}`;
-
+    const ttl = 60 * 60;
     try {
-      const cached = await this.redis.get<QueryClassification>(key);
+      const cached = await this.cache.get<QueryClassification>(key);
 
       if (cached) {
         return cached;
@@ -584,13 +599,10 @@ export class TextRagService implements TextRagPort {
     }
 
     const result = await this.queryClassifier.classify(query);
+    this.logger.log('classifyQuery_result', { type: result.type, confidence: result.confidence });
 
     try {
-      await this.redis.set(
-        key,
-        JSON.stringify(result),
-        { ex: 60 * 60 }
-      );
+      await this.cache.set(key, result, ttl);
     } catch (err: any) {
       this.logger.warn('classifyQuery: Redis set failed', { error: err?.message });
     }
@@ -603,8 +615,9 @@ export class TextRagService implements TextRagPort {
     limit?: number,
     options?: RetrieveInternalOptions,
   ): Promise<Array<IDocumentWithEmbedding> | string> {
-    const ragConfig      = this.configService.get<TRagConfig>(RAG_CONFIG);
-    const effectiveLimit = limit ?? options?.limit ?? ragConfig?.textRagDefaultLimit ?? 6;
+    const { textRagDefaultLimit: defaultLimit, textRagCollectionName: collectionFromSettings } =
+      this.ragSettings.get();
+    const effectiveLimit = limit ?? options?.limit ?? defaultLimit;
 
     const {
       useHybridSearch,
@@ -615,14 +628,17 @@ export class TextRagService implements TextRagPort {
       useConversationMemory,
       sessionId,
       scoreThreshold,
+      filters,
       _searchMode,
     } = options || {};
 
-    const entityQuery    = isEntityQuery(query);
-    const collectionName = ragConfig?.textRagCollectionName;
+    const collectionName = collectionFromSettings;
     if (!collectionName) return 'RAG text collection name is not configured';
 
-    const searchMode: SearchMode | 'entity' = _searchMode ?? (entityQuery ? 'entity' : 'balanced');
+    const searchMode: SearchMode | 'entity' = _searchMode ?? 'balanced';
+    const isEntityMode = searchMode === 'entity';
+    const shouldUseHybridSearch = useHybridSearch !== false;
+    const metadataFilter = this.buildMetadataFilter(filters);
 
     let keywords: string[]       = [];
     let queriesToEmbed: string[] = [query];
@@ -632,7 +648,7 @@ export class TextRagService implements TextRagPort {
 
     if (useQueryTransformation) {
       try {
-        const transformed = await this.queryTransformer.transformQuery(query);
+        const transformed = await this.queryTransformer.transformQuery(query, isEntityMode);
 
         keywords = transformed.keywords.filter(
           kw => kw.length > 2 && !KEYWORD_STOP_WORDS.has(kw.toLowerCase()),
@@ -664,6 +680,12 @@ export class TextRagService implements TextRagPort {
       }
     }
 
+    this.logger.log('retrieve_keywords', { count: keywords.length, sample: keywords.slice(0, 5) });
+
+    if (keywords.length === 0) {
+      keywords = this.extractFallbackKeywords(query);
+    }
+
     if (useConversationMemory && sessionId) {
       const history = await this.conversationRepository.getHistory(sessionId, 2);
       if (history.length > 0) {
@@ -674,45 +696,58 @@ export class TextRagService implements TextRagPort {
       }
     }
 
-    const embeddings       = await Promise.all(queriesToEmbed.map(q => this.ollama.embed(q)));
-    const primaryEmbedding = new Embedding(extractEmbedding(embeddings[0]));
+    const rawEmbeddings = await Promise.all(queriesToEmbed.map(q => this.embeddingPort.embed(q)));
+    const embeddings = rawEmbeddings
+      .map(emb => extractEmbedding(emb))
+      .filter(vector => vector.length > 0);
+
+    if (embeddings.length === 0) {
+      this.logger.error('retrieve: empty embeddings from Ollama', {
+        queriesCount: queriesToEmbed.length,
+      });
+      throw new Error('Embedding generation returned empty vectors');
+    }
+
+    const primaryEmbedding = new Embedding(embeddings[0]);
 
     let results: Array<{ id: string; text: string; score: number }> = [];
 
     const effectivenessLimit = (searchMode === 'entity' ? 6 : 4) * effectiveLimit;
 
-    if (useHybridSearch) {
+    if (shouldUseHybridSearch) {
       let allSearchResults = await Promise.all(
         embeddings.map(emb =>
           this.hybridSearch.search(
             collectionName,
-            new Embedding(extractEmbedding(emb)),
+            new Embedding(emb),
             keywords,
             effectivenessLimit,
             {
               searchMode,
               minTextLength:  MIN_CHUNK_TEXT_LENGTH,
               originalQuery:  query,
+              ...(metadataFilter ? { filter: metadataFilter } : {}),
               ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
             },
           ),
         ),
       );
 
-      const isCompletelyEmpty = allSearchResults.every(arr => arr!.length === 0);
+      const isCompletelyEmpty = allSearchResults.every(arr => !arr || arr.length === 0);
 
       if (isCompletelyEmpty) {
         allSearchResults = await Promise.all(
           embeddings.map(emb =>
             this.hybridSearch.search(
               collectionName,
-              new Embedding(extractEmbedding(emb)),
+              new Embedding(emb),
               keywords,
               effectivenessLimit,
               {
                 searchMode,
                 minTextLength:  MIN_CHUNK_TEXT_LENGTH,
                 originalQuery:  query,
+                ...(metadataFilter ? { filter: metadataFilter } : {}),
               },
             ),
           ),
@@ -743,8 +778,8 @@ export class TextRagService implements TextRagPort {
           const uaEmbeddings   = embeddings.slice(uaStartIndex);
           const uaSearchResults = await Promise.all(
             uaEmbeddings.map(emb =>
-              this.qdrantService.search(collectionName, {
-                vector:          extractEmbedding(emb),
+              this.vectorSearch.search(collectionName, {
+                vector:          emb,
                 limit:           effectivenessLimit,
                 searchMode:      'wide',
                 score_threshold: null,
@@ -796,7 +831,8 @@ export class TextRagService implements TextRagPort {
         effectiveLimit * 3,
         {
           ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
-          searchMode: entityQuery ? 'wide' : 'balanced',
+          searchMode: isEntityMode ? 'wide' : 'balanced',
+          ...(metadataFilter ? { filter: metadataFilter } : {}),
         },
       );
 
@@ -817,18 +853,19 @@ export class TextRagService implements TextRagPort {
         ? topScores.reduce((a, b) => a + b, 0) / topScores.length
         : 0;
 
-      const entityKeywordMissing = entityQuery && keywords.length > 0 &&
+      const keywordMissing = isEntityMode && keywords.length > 0 &&
         !results.slice(0, 3).some(r =>
           keywords.some(kw => r.text.toLowerCase().includes(kw.toLowerCase())),
         );
 
-      if (avgTopScore < 0.72 || entityKeywordMissing) {
+      if (avgTopScore < 0.72 || keywordMissing) {
         const hybridFallback = await this.hybridSearch.search(
           collectionName, primaryEmbedding, keywords, effectiveLimit * 3,
           {
             searchMode,
             minTextLength: MIN_CHUNK_TEXT_LENGTH,
             originalQuery: query,
+            ...(metadataFilter ? { filter: metadataFilter } : {}),
             ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
           },
         );
@@ -839,9 +876,14 @@ export class TextRagService implements TextRagPort {
 
     if (results.length === 0) return 'There is no relevant information in knowledge';
 
+    const entityCandidateLimit =
+      searchMode === 'entity'
+        ? Math.max(effectiveLimit * 4, 24)
+        : effectiveLimit;
+
     if (useReranking && rerankStrategy !== 'none' && results.length > effectiveLimit && searchMode !== 'wide') {
       const reranked = await this.reranker.rerank(query, results, {
-        topK:   effectiveLimit,
+        topK:   entityCandidateLimit,
         method: rerankStrategy === 'cross_encoder' ? 'listwise'
               : rerankStrategy === 'llm_based'     ? 'llm'
               : 'hybrid',
@@ -853,11 +895,26 @@ export class TextRagService implements TextRagPort {
 
     results = results.filter(r => r.score > scoreFloor);
     results = results.filter(r => (r as any).level !== 0);
-    results = results.slice(0, effectiveLimit);
 
-    if (searchMode === 'wide' || searchMode === 'entity') {
+    
+    
+    if (searchMode === 'entity') {
       const nameTokenGroups = this.extractNameTokens(query);
       if (nameTokenGroups.length > 0) {
+        const matchScore = (text: string, groups: string[][]): number => {
+          const lower = text.toLowerCase();
+          const translitText = cyrillicToLatin(lower);
+          let score = 0;
+          for (const variants of groups) {
+            const matched = variants.some(v => {
+              const vLower = v.toLowerCase();
+              return lower.includes(vLower) || translitText.includes(cyrillicToLatin(vLower));
+            });
+            if (matched) score += 1;
+          }
+          return score;
+        };
+
         const chunkMatches = (text: string, groups: string[][]): boolean => {
           const lower        = text.toLowerCase();
           const translitText = cyrillicToLatin(lower);
@@ -897,6 +954,12 @@ export class TextRagService implements TextRagPort {
         }
 
         if (filtered.length > 0) {
+          filtered = filtered.sort((a, b) => {
+            const byNameMatch =
+              matchScore(b.text, nameTokenGroups) - matchScore(a.text, nameTokenGroups);
+            if (byNameMatch !== 0) return byNameMatch;
+            return (b.score ?? 0) - (a.score ?? 0);
+          });
           this.logger.log('EntityPostFilter', {
             query,
             groups: nameTokenGroups.map(g => g.slice(0, 4)),
@@ -915,6 +978,8 @@ export class TextRagService implements TextRagPort {
       }
     }
 
+    results = results.slice(0, effectiveLimit);
+
     const shouldCompress = useContextualCompression && searchMode !== 'entity';
     if (shouldCompress) {
       try {
@@ -932,6 +997,160 @@ export class TextRagService implements TextRagPort {
     return results as IDocumentWithEmbedding[];
   }
 
+  private extractFallbackKeywords(query: string): string[] {
+    return [...new Set(
+      query
+        .toLowerCase()
+        .replace(/[?!.,;:'"]/g, ' ')
+        .split(/\s+/)
+        .map(token => token.trim())
+        .filter(token => token.length > 2 && !KEYWORD_STOP_WORDS.has(token)),
+    )].slice(0, 15);
+  }
+
+  private buildMetadataFilter(filters?: MetadataFilterInput[]): unknown | undefined {
+    if (!filters?.length) return undefined;
+
+    const must: Array<Record<string, unknown>> = [];
+    const mustNot: Array<Record<string, unknown>> = [];
+
+    for (const filter of filters) {
+      if (!filter?.field) continue;
+      if (filter.value === undefined || filter.value === null) continue;
+
+      const key = filter.field;
+      const op  = filter.operator ?? 'eq';
+
+      if (op === 'ne') {
+        mustNot.push({ key, match: { value: filter.value } });
+        continue;
+      }
+
+      if (op === 'in' && Array.isArray(filter.value)) {
+        const values = filter.value.filter(v => v !== undefined && v !== null);
+        if (!values.length) continue;
+        must.push({
+          should: values.map(value => ({ key, match: { value } })),
+        });
+        continue;
+      }
+
+      if (op === 'gt' || op === 'gte' || op === 'lt' || op === 'lte') {
+        if (typeof filter.value !== 'number') continue;
+        must.push({
+          key,
+          range: {
+            ...(op === 'gt' ? { gt: filter.value } : {}),
+            ...(op === 'gte' ? { gte: filter.value } : {}),
+            ...(op === 'lt' ? { lt: filter.value } : {}),
+            ...(op === 'lte' ? { lte: filter.value } : {}),
+          },
+        });
+        continue;
+      }
+
+      must.push({ key, match: { value: filter.value } });
+    }
+
+    if (must.length === 0 && mustNot.length === 0) return undefined;
+    return {
+      ...(must.length > 0 ? { must } : {}),
+      ...(mustNot.length > 0 ? { must_not: mustNot } : {}),
+    };
+  }
+
+  private normalizeCacheQuery(query: string): string {
+    return query.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 600);
+  }
+
+  private shouldUseAnswerCache(options?: AskQuestionOptions): boolean {
+    if (options?.useAnswerCache === false) return false;
+    if (options?.sessionId) return false;
+    if ((options?.conversationHistory?.length ?? 0) > 0) return false;
+    if (options?.useConversationMemory) return false;
+    return true;
+  }
+
+  private getAnswerCacheKey(query: string, options?: AskQuestionOptions): string {
+    const payload = {
+      q: this.normalizeCacheQuery(query),
+      limit: options?.limit,
+      scoreThreshold: options?.scoreThreshold,
+      useHybridSearch: options?.useHybridSearch,
+      useReranking: options?.useReranking,
+      rerankStrategy: options?.rerankStrategy,
+      useQueryTransformation: options?.useQueryTransformation,
+      useContextualCompression: options?.useContextualCompression,
+      useKnowledgeGraph: options?.useKnowledgeGraph,
+      useCitationTracking: options?.useCitationTracking,
+      filters: options?.filters,
+      includeSources: options?.includeSources,
+      topP: options?.topP,
+      topK: options?.topK,
+      temperature: options?.temperature,
+      maxTokens: options?.maxTokens,
+    };
+    return `answer_cache:${JSON.stringify(payload)}`;
+  }
+
+  private async getCachedAnswer(
+    query: string,
+    options?: AskQuestionOptions,
+  ): Promise<IGenerateAnswer | null> {
+    if (!this.shouldUseAnswerCache(options)) return null;
+
+    const key = this.getAnswerCacheKey(query, options);
+    try {
+      const cached = await this.redis.get<any>(key);
+      if (!cached) return null;
+      if (typeof cached === 'string') {
+        return JSON.parse(cached) as IGenerateAnswer;
+      }
+      return cached as IGenerateAnswer;
+    } catch (err: any) {
+      this.logger.warn('Answer cache get failed', { error: err?.message });
+      return null;
+    }
+  }
+
+  private async setCachedAnswer(
+    query: string,
+    options: AskQuestionOptions | undefined,
+    answer: IGenerateAnswer,
+  ): Promise<void> {
+    if (!this.shouldUseAnswerCache(options)) return;
+
+    const key = this.getAnswerCacheKey(query, options);
+    try {
+      await this.redis.set(key, JSON.stringify(answer), { ex: ANSWER_CACHE_TTL_SEC });
+    } catch (err: any) {
+      this.logger.warn('Answer cache set failed', { error: err?.message });
+    }
+  }
+
+  private deduplicateContextDocs(
+    docs: IDocumentWithEmbedding[],
+    limit: number,
+  ): IDocumentWithEmbedding[] {
+    const seen = new Set<string>();
+    const deduped: IDocumentWithEmbedding[] = [];
+
+    for (const doc of docs) {
+      const normalized = doc.text
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 260);
+      if (!normalized) continue;
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      deduped.push(doc);
+      if (deduped.length >= limit) break;
+    }
+
+    return deduped;
+  }
+
   async getAllDocuments(): Promise<IDocumentWithoutEmbedding[]> {
     const documents = await this.textRepository.findAll();
     return documents.map(doc => ({
@@ -942,16 +1161,11 @@ export class TextRagService implements TextRagPort {
     }));
   }
 
-  // ── Shared generation context ─────────────────────────────────────────────
-  //
-  // Both generateAnswer and streamableGenerateAnswer call this.
-  // Returns PreparedContext on success, or { earlyExit: string } when the
-  // pipeline should short-circuit (no results / injection etc.).
-
   private async prepareGenerationContext(
     query: string,
     options?: AskQuestionOptions,
   ): Promise<PreparedContext | { earlyExit: string }> {
+    const traceStartMs = Date.now();
     const classification = await this.classifyQuery(query);
     const p: FineTuningParams = classification.params;
 
@@ -966,21 +1180,22 @@ export class TextRagService implements TextRagPort {
       },
     });
 
+    
     const retrieveOptions: RetrieveInternalOptions = {
-      limit:                    p.limit,
-      scoreThreshold:           p.scoreThreshold,
-      useHybridSearch:          p.useHybridSearch,
-      useReranking:             p.useReranking,
-      rerankStrategy:           p.rerankStrategy,
-      useQueryTransformation:   p.useQueryTransformation,
-      useContextualCompression: p.useContextualCompression,
-      useConversationMemory:    p.useConversationMemory,
+      limit:                    options?.limit                    ?? p.limit,
+      scoreThreshold:           options?.scoreThreshold           ?? p.scoreThreshold,
+      useHybridSearch:          options?.useHybridSearch          ?? p.useHybridSearch,
+      useReranking:             options?.useReranking             ?? p.useReranking,
+      rerankStrategy:           options?.rerankStrategy           ?? p.rerankStrategy,
+      useQueryTransformation:   options?.useQueryTransformation   ?? p.useQueryTransformation,
+      useContextualCompression: options?.useContextualCompression ?? p.useContextualCompression,
+      useConversationMemory:    options?.useConversationMemory    ?? p.useConversationMemory,
       filters:                  options?.filters,
       sessionId:                options?.sessionId,
-      _searchMode:              p.searchMode,
+      _searchMode:              p.searchMode, 
     };
 
-    // Kick off retrieve and links lookup in parallel
+    const retrieveStartMs = Date.now();
     const [rawRetrieved, linksResult] = await Promise.all([
       this.retrieve(query, undefined, retrieveOptions),
       this.linkService
@@ -995,8 +1210,8 @@ export class TextRagService implements TextRagPort {
     if (typeof rawRetrieved === 'string') {
       return { earlyExit: rawRetrieved };
     }
+    const retrieveDurationMs = Date.now() - retrieveStartMs;
 
-    // ── Score filtering (factual queries only) ──────────────────────────────
     const effectiveThreshold =
       classification.type === 'factual'
         ? Math.min(p.scoreThreshold, FACTUAL_SCORE_THRESHOLD_CAP)
@@ -1028,16 +1243,18 @@ export class TextRagService implements TextRagPort {
       return { earlyExit: 'Відповідь відсутня у наданій інформації.' };
     }
 
-    // ── Knowledge graph ──────────────────────────────────────────────────────
     const useKG = options?.useKnowledgeGraph ?? p.useKnowledgeGraph;
     const kgContext = useKG ? await this.queryKnowledgeGraph(query) : undefined;
 
-    // ── Build prompt ─────────────────────────────────────────────────────────
-    const context = retrieved
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-      .slice(0, classification.type === 'entity' ? 10 : 7)
-      .map(doc => doc.text)
-      .join('\n\n');
+    const contextLimit = classification.type === 'entity' ? 8 : 7;
+    const retrievedForPrompt = this.deduplicateContextDocs(
+      [...retrieved].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
+      contextLimit,
+    );
+
+    const context = await this.ragContextFormatting.formatRetrievedDocuments(
+      retrievedForPrompt.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
+    );
 
     let prompt = this.buildPrompt(classification.type, context, query);
 
@@ -1056,35 +1273,59 @@ export class TextRagService implements TextRagPort {
     }
 
     if (classification.type !== 'entity') {
-      prompt += `\n\n<linksResult>\n${linksResult.block}\n</linksResult>
+      prompt += `
+        \n\n<linksResult>\n${linksResult.block}\n</linksResult>
 
-<links_usage_rules>
-  - Використовуй linksResult лише якщо хоча б одне посилання прямо відповідає на запит
-  - Якщо посилання лише дотично пов'язані — НЕ використовуй їх
-  - Не вставляй посилання, якщо відповідь і так повна без них
-  - Максимум 1–3 посилання
-</links_usage_rules>`;
+        <links_usage_rules>
+          - Використовуй linksResult лише якщо хоча б одне посилання прямо відповідає на запит
+          - Якщо посилання лише дотично пов'язані — НЕ використовуй їх
+          - Не вставляй посилання, якщо відповідь і так повна без них
+          - Максимум 1–3 посилання
+        </links_usage_rules>`;
     }
 
     prompt += `\n\n<question>${query}</question>\n\nВідповідь (структурована, на основі контексту):`;
+
+    this.logger.log('RagTrace_PrepareContext', {
+      query: query.slice(0, 80),
+      retrieveDurationMs,
+      totalPrepareMs: Date.now() - traceStartMs,
+      diagnostics: {
+        effectiveLimit:  retrieveOptions.limit ?? p.limit,
+        preFilterCount:  rawRetrieved.length,
+        postFilterCount: postFilterResults.length,
+        finalCount:      retrieved.length,
+        searchMode:      p.searchMode,
+      },
+    });
+
+    const generationParams = {
+      temperature:   options?.temperature   ?? p.temperature,
+      topP:          options?.topP          ?? p.topP,
+      topK:          options?.topK          ?? p.topK,
+      maxTokens:     options?.maxTokens     ?? p.maxTokens,
+      repeatPenalty: p.repeatPenalty,
+      seed:          p.seed,
+    };
 
     return {
       classification,
       p,
       retrieved,
       prompt,
-      generationParams: {
-        temperature:   p.temperature,
-        topP:          p.topP,
-        topK:          p.topK,
-        maxTokens:     p.maxTokens,
-        repeatPenalty: p.repeatPenalty,
-        seed:          p.seed,
+      generationParams,
+      retrievalDiagnostics: {
+        effectiveLimit:               retrieveOptions.limit               ?? p.limit,
+        preFilterCount:               rawRetrieved.length,
+        postFilterCount:              postFilterResults.length,
+        finalCount:                   retrieved.length,
+        searchMode:                   p.searchMode,
+        hybridEnabled:                retrieveOptions.useHybridSearch     ?? p.useHybridSearch,
+        rerankEnabled:                retrieveOptions.useReranking         ?? p.useReranking,
+        contextualCompressionEnabled: retrieveOptions.useContextualCompression ?? p.useContextualCompression,
       },
     };
   }
-
-  // ── Confidence check (extracted so it's independently testable) ───────────
 
   private async runConfidenceCheck(
     query: string,
@@ -1116,11 +1357,9 @@ export class TextRagService implements TextRagPort {
     }
   }
 
-  // ── Persist session turn (non-blocking helper) ────────────────────────────
-
   private persistSessionTurn(sessionId: string, query: string, answer: string): void {
     setImmediate(() => {
-      this.ollama
+      this.embeddingPort
         .embed(query)
         .then(emb =>
           this.conversationRepository.addTurn(
@@ -1130,8 +1369,6 @@ export class TextRagService implements TextRagPort {
         .catch(err => this.logger.warn('Session embed failed', { error: err?.message }));
     });
   }
-
-  // ── Prompt templates ──────────────────────────────────────────────────────
 
   private buildPrompt(
     type: 'entity' | 'factual' | 'wide',
@@ -1153,15 +1390,15 @@ export class TextRagService implements TextRagPort {
       ЗАВДАННЯ:
 
       1. Проаналізуй ВЕСЬ контекст
-      2. Збери ВСЮ інформацію, що стосується сутності (людини / об'єкта)
-      3. ОБ'ЄДНАЙ її в цілісне узагальнення
-      4. Структуруй відповідь за змістом (ролі, дії, процеси, деталі тощо)
+      2. Візьми інформацію, яка прямо відповідає на поточне питання, і додай важливий контекст
+      3. Відкинь тільки явно зайві біографічні/довідкові деталі, що не стосуються питання
+      4. ОБ'ЄДНАЙ релевантне в цілісне, розгорнуте узагальнення
 
       ФОРМАТ ВІДПОВІДІ:
 
-      - короткий вступ (хто/що це)
-      - далі логічні підрозділи (сам обери структуру)
-      - під кожним — узагальнена інформація
+      - 1 короткий вступ (хто/що це)
+      - далі 4-6 змістовних пунктів по суті питання
+      - додавай важливі деталі та приклади з контексту, якщо вони допомагають зрозуміти відповідь
 
       ВАЖЛИВО:
 
@@ -1288,8 +1525,6 @@ export class TextRagService implements TextRagPort {
     return PROMPTS[type];
   }
 
-  // ── generateAnswer ────────────────────────────────────────────────────────
-
   async generateAnswer(
     query: string,
     options?: AskQuestionOptions,
@@ -1300,16 +1535,42 @@ export class TextRagService implements TextRagPort {
       return { answer: err?.message ?? 'Prompt injection detected' };
     }
 
+    const cached = await this.getCachedAnswer(query, options);
+    if (cached) {
+      const sanitizedCachedAnswer = this.sanitizeModelOutput(
+        cached.formattedAnswer ?? cached.answer ?? '',
+      );
+      this.logger.log('RagTrace_AnswerCache', {
+        query: query.slice(0, 80),
+        hit: true,
+      });
+      const cachedWithFlag: IGenerateAnswer = {
+        ...cached,
+        answer: sanitizedCachedAnswer,
+        formattedAnswer: sanitizedCachedAnswer,
+        retrievalDiagnostics: {
+          ...(cached.retrievalDiagnostics ?? {}),
+          cacheHit: true,
+        },
+      };
+
+      if (options?.includeRetrievalDiagnostics) return cachedWithFlag;
+
+      const { retrievalDiagnostics, ...withoutDiagnostics } = cachedWithFlag;
+      return withoutDiagnostics;
+    }
+
     const ctx = await this.prepareGenerationContext(query, options);
 
     if ('earlyExit' in ctx) {
       return { answer: ctx.earlyExit };
     }
 
-    const { classification, p, retrieved, prompt, generationParams } = ctx;
+    const { classification, p, retrieved, prompt, generationParams, retrievalDiagnostics } = ctx;
     const { temperature, topP, topK, maxTokens, repeatPenalty, seed } = generationParams;
 
-    const answer = await this.ollama.getRagResponseByPrompt(prompt, {
+    const generationStartMs = Date.now();
+    const rawAnswer = await this.chatLlmPort.complete(prompt, {
       temperature,
       topP,
       topK,
@@ -1317,6 +1578,8 @@ export class TextRagService implements TextRagPort {
       repeatPenalty,
       seed,
     });
+    const answer = this.sanitizeModelOutput(rawAnswer);
+    const generationDurationMs = Date.now() - generationStartMs;
 
     const useCitations = options?.useCitationTracking ?? p.useCitationTracking;
     let citations: TrackCitation[] = [];
@@ -1329,7 +1592,7 @@ export class TextRagService implements TextRagPort {
     }
 
     if (options?.sessionId) {
-      const embedding = await this.ollama.embed(query);
+      const embedding = await this.embeddingPort.embed(query);
       await this.conversationRepository.addTurn(
         options.sessionId, query, answer, extractEmbedding(embedding),
       );
@@ -1337,7 +1600,7 @@ export class TextRagService implements TextRagPort {
 
     const topScore = retrieved[0]?.score;
 
-    return {
+    const response: IGenerateAnswer = {
       answer:         formattedAnswer,
       formattedAnswer,
       citations,
@@ -1347,6 +1610,12 @@ export class TextRagService implements TextRagPort {
       queryConfidence: classification.confidence,
       generationParams,
       conversationContext: !!options?.sessionId,
+      ...(options?.includeRetrievalDiagnostics && {
+        retrievalDiagnostics: {
+          ...retrievalDiagnostics,
+          cacheHit: false,
+        },
+      }),
       ...(options?.includeSources && {
         sources: retrieved.map(doc => ({
           id:       doc.id,
@@ -1356,9 +1625,17 @@ export class TextRagService implements TextRagPort {
         })),
       }),
     };
-  }
 
-  // ── streamableGenerateAnswer ──────────────────────────────────────────────
+    await this.setCachedAnswer(query, options, response);
+    this.logger.log('RagTrace_GenerateAnswer', {
+      query: query.slice(0, 80),
+      generationDurationMs,
+      answerChars: answer.length,
+      citations: citations.length,
+      relevantChunks: retrieved.length,
+    });
+    return response;
+  }
 
   async *streamableGenerateAnswer(
     query: string,
@@ -1367,11 +1644,53 @@ export class TextRagService implements TextRagPort {
     try {
       PromptInjectionGuard.assertSafe(query);
     } catch (err: any) {
-      yield { event: 'error', error: err?.message ?? 'Prompt injection detected' };
+      yield { event: 'error', error: 'Prompt injection detected' };
       return;
     }
 
-    const ctx = await this.prepareGenerationContext(query, options);
+    
+    const cached = await this.getCachedAnswer(query, options);
+    if (cached) {
+      const sanitizedCachedAnswer = this.sanitizeModelOutput(
+        cached.formattedAnswer ?? cached.answer ?? '',
+      );
+      this.logger.log('RagTrace_Stream_AnswerCache', { query: query.slice(0, 80), hit: true });
+      const cachedWithFlag: IGenerateAnswer = {
+        ...cached,
+        answer: sanitizedCachedAnswer,
+        formattedAnswer: sanitizedCachedAnswer,
+        retrievalDiagnostics: { ...(cached.retrievalDiagnostics ?? {}), cacheHit: true },
+      };
+      yield {
+        event: 'metadata',
+        metadata: {
+          relevantChunks:  cachedWithFlag.relevantChunks,
+          confidence:      cachedWithFlag.confidence,
+          queryType:       cachedWithFlag.queryType,
+          queryConfidence: cachedWithFlag.queryConfidence,
+          generationParams: cachedWithFlag.generationParams,
+          conversationContext: cachedWithFlag.conversationContext,
+          ...(options?.includeRetrievalDiagnostics && {
+            retrievalDiagnostics: cachedWithFlag.retrievalDiagnostics,
+          }),
+        },
+      };
+      yield { event: 'token', token: cachedWithFlag.formattedAnswer ?? cachedWithFlag.answer };
+      yield { event: 'done',  metadata: { citations: cachedWithFlag.citations ?? [], relevantChunks: cachedWithFlag.relevantChunks ?? 0 } };
+      return;
+    }
+
+    let ctx: PreparedContext | { earlyExit: string } = { earlyExit: 'Prepare generation context failed' };
+
+    try {
+      ctx = await this.prepareGenerationContext(query, options);
+    } catch (err: any) {
+      this.logger.error('streamableGenerateAnswer: prepareGenerationContext failed', {
+        error: err?.message,
+      });
+      yield { event: 'error', error: 'Prepare generation context failed' };
+      return;
+    }
 
     if ('earlyExit' in ctx) {
       yield { event: 'metadata', metadata: { relevantChunks: 0, citations: [] } };
@@ -1380,19 +1699,23 @@ export class TextRagService implements TextRagPort {
       return;
     }
 
-    const { classification, p, retrieved, prompt, generationParams } = ctx;
+    const { classification, p, retrieved, prompt, generationParams, retrievalDiagnostics } = ctx;
     const { temperature, topP, topK, maxTokens, repeatPenalty, seed } = generationParams;
+    const relevantChunks = retrieved.length;
+    const confidence      = retrieved[0]?.score;
 
-    // Emit metadata before first token so the client can show context info immediately
     yield {
       event: 'metadata',
       metadata: {
-        relevantChunks:   retrieved.length,
-        confidence:       retrieved[0]?.score,
+        relevantChunks,
+        confidence,
         queryType:        classification.type,
         queryConfidence:  classification.confidence,
         generationParams,
         conversationContext: !!options?.sessionId,
+        ...(options?.includeRetrievalDiagnostics && {
+          retrievalDiagnostics: { ...retrievalDiagnostics, cacheHit: false },
+        }),
         ...(options?.includeSources && {
           sources: retrieved.map(doc => ({
             id:       doc.id,
@@ -1404,10 +1727,10 @@ export class TextRagService implements TextRagPort {
       },
     };
 
-    // Stream tokens
-    let fullAnswer = '';
+    let rawFullAnswer = '';
+    let streamedSanitizedAnswer = '';
     try {
-      for await (const token of this.ollama.getRagResponseByPromptStream(prompt, {
+      for await (const token of this.chatLlmPort.stream(prompt, {
         temperature,
         topP,
         topK,
@@ -1415,39 +1738,78 @@ export class TextRagService implements TextRagPort {
         repeatPenalty,
         seed,
       })) {
-        fullAnswer += token;
-        yield { event: 'token', token };
+        rawFullAnswer += token;
+        const sanitizedNow = this.sanitizeModelOutput(rawFullAnswer);
+        const delta = sanitizedNow.slice(streamedSanitizedAnswer.length);
+        if (delta) {
+          streamedSanitizedAnswer = sanitizedNow;
+          yield { event: 'token', token: delta };
+        }
       }
     } catch (err: any) {
-      yield { event: 'error', error: err?.message ?? 'LLM streaming failed' };
+      yield { event: 'error', error: 'LLM streaming failed' };
       return;
     }
 
-    // Fire-and-forget confidence check — doesn't block done event
-    this.runConfidenceCheck(query, fullAnswer, retrieved).catch(() => {});
+    
+    let finalAnswer = streamedSanitizedAnswer;
+    try {
+      const verification = await this.confidencePort.verify(
+        finalAnswer,
+        retrieved.map(r => r.text),
+      );
 
-    // Citations
-    const useCitations = options?.useCitationTracking ?? p.useCitationTracking;
-    const citations = useCitations
-      ? this.trackCitations(fullAnswer, retrieved).citations
-      : [];
+      this.logger.log('Stream_Confidence', {
+        score:    verification.confidence.score,
+        tier:     verification.confidence.tier,
+        grounded: verification.grounded,
+        verdict:  verification.llmVerdict,
+      });
 
-    // Persist conversation turn (non-blocking)
-    if (options?.sessionId) {
-      this.persistSessionTurn(options.sessionId, query, fullAnswer);
+      if (!verification.grounded && verification.llmVerdict === 'NO') {
+        finalAnswer = 'Немає релевантної відповіді';
+        yield { event: 'correction', correctedAnswer: finalAnswer, reason: 'hallucination' };
+      }
+    } catch (err: any) {
+      this.logger.warn('Stream_Confidence: check failed', { error: err?.message });
     }
 
-    yield { event: 'done', metadata: { citations, relevantChunks: retrieved.length } };
-  }
+    let citations: TrackCitation[] = [];
+    try {
+      const useCitations = options?.useCitationTracking ?? p.useCitationTracking;
+      citations = useCitations
+        ? this.trackCitations(finalAnswer, retrieved).citations
+        : [];
+    } catch (err: any) {
+      yield { event: 'error', error: 'Citation tracking failed' };
+      return;
+    }
 
-  // ── deleteById ────────────────────────────────────────────────────────────
+    if (options?.sessionId) {
+      this.persistSessionTurn(options.sessionId, query, finalAnswer);
+    }
+
+    
+    const responseForCache: IGenerateAnswer = {
+      answer:          finalAnswer,
+      formattedAnswer: finalAnswer,
+      citations,
+      relevantChunks,
+      confidence,
+      queryType:       classification.type,
+      queryConfidence: classification.confidence,
+      generationParams,
+      conversationContext: !!options?.sessionId,
+    };
+    await this.setCachedAnswer(query, options, responseForCache);
+
+    yield { event: 'done', metadata: { citations, relevantChunks } };
+  }
 
   async deleteById(id: string): Promise<IDeleteDocument> {
     await this.textRepository.deleteById(id);
     return { deletedDocumentId: id };
   }
-
-  // ── Citation tracking ─────────────────────────────────────────────────────
 
   private trackCitations(
     answer: string,
@@ -1485,6 +1847,16 @@ export class TextRagService implements TextRagPort {
     return { citations, formattedAnswer };
   }
 
+  private sanitizeModelOutput(answer: string): string {
+    return answer
+      .replace(/<linksResult>[\s\S]*?<\/linksResult>/gi, '')
+      .replace(/<linkResults>[\s\S]*?<\/linkResults>/gi, '')
+      .replace(/<links_usage_rules>[\s\S]*?<\/links_usage_rules>/gi, '')
+      .replace(/<\/?(linksResult|linkResults|links_usage_rules)>/gi, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
   private findSimilarContent(haystack: string, needle: string): boolean {
     const needleWords = needle.toLowerCase().split(/\s+/).filter(w => w.length > 2);
     if (needleWords.length === 0) return false;
@@ -1492,8 +1864,6 @@ export class TextRagService implements TextRagPort {
     const matched = needleWords.filter(word => haystackLower.includes(word));
     return matched.length / needleWords.length > 0.6;
   }
-
-  // ── Parent context expansion ──────────────────────────────────────────────
 
   private async expandToParentContext(
     results: Array<IDocumentWithEmbedding>,
@@ -1505,12 +1875,11 @@ export class TextRagService implements TextRagPort {
     const parentTexts = new Map<string, string>();
     if (parentIds.length > 0) {
       try {
-        const ragConfig      = this.configService.get<TRagConfig>(RAG_CONFIG);
-        const collectionName = ragConfig?.textRagCollectionName;
+        const { textRagCollectionName: collectionName } = this.ragSettings.get();
         if (collectionName) {
-          const parentPoints = await this.qdrantService.getPoints(collectionName, parentIds);
+          const parentPoints = await this.vectorSearch.getPoints(collectionName, parentIds);
           for (const p of parentPoints) {
-            parentTexts.set(p.id.toString(), (p.payload as any)?.text ?? '');
+            parentTexts.set(p.id.toString(), (p.payload as Record<string, unknown>)?.text as string ?? '');
           }
         }
       } catch (err) {
@@ -1553,8 +1922,6 @@ export class TextRagService implements TextRagPort {
     return [...merged, ...noParent];
   }
 
-  // ── Knowledge graph ───────────────────────────────────────────────────────
-
   private async extractKnowledgeGraph(text: string, documentId: string): Promise<void> {
     try {
       const { entities, relationships } = await this.extractEntitiesAndRelations(text, documentId);
@@ -1589,7 +1956,7 @@ export class TextRagService implements TextRagPort {
       {"entities":[{"name":"...","type":"..."}],"relations":[{"from":"...","relation":"...","to":"..."}]}`;
 
     try {
-      const response  = await this.ollama.getRagResponseByPrompt(prompt, { temperature: 0, maxTokens: 800 });
+      const response  = await this.chatLlmPort.complete(prompt, { temperature: 0, maxTokens: 800 });
       const clean     = response.replace(/```(?:json)?/g, '').trim();
       const jsonMatch = clean.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return { entities: [], relationships: [] };

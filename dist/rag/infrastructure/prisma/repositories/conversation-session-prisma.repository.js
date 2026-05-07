@@ -19,9 +19,10 @@ const prisma_service_1 = require("../prisma.service");
 const uuid_1 = require("uuid");
 const HISTORY_TTL_SECONDS = 60 * 60 * 24;
 let ConversationSessionPrismaRepository = class ConversationSessionPrismaRepository {
-    constructor(prisma, redis) {
+    constructor(prisma, redis, logger) {
         this.prisma = prisma;
         this.redis = redis;
+        this.logger = logger;
     }
     async addTurn(sessionId, query, answer, embedding) {
         await this.prisma.conversationSession.create({
@@ -42,11 +43,12 @@ let ConversationSessionPrismaRepository = class ConversationSessionPrismaReposit
         try {
             const cached = await this.redis.get(cacheKey);
             if (cached) {
-                const parsed = JSON.parse(cached);
-                return parsed.map(t => ({ ...t, timestamp: new Date(t.timestamp) }));
+                return JSON.parse(cached);
             }
         }
         catch (err) {
+            this.logger.error('getHistory: Redis get failed', { error: err?.message });
+            return [];
         }
         const sessions = await this.prisma.conversationSession.findMany({
             where: { sessionId },
@@ -112,7 +114,8 @@ exports.ConversationSessionPrismaRepository = ConversationSessionPrismaRepositor
 exports.ConversationSessionPrismaRepository = ConversationSessionPrismaRepository = __decorate([
     (0, common_1.Injectable)(),
     __param(1, (0, common_1.Inject)('REDIS_CLIENT')),
+    __param(2, (0, common_1.Inject)('LoggerPort')),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        ioredis_1.default])
+        ioredis_1.default, Object])
 ], ConversationSessionPrismaRepository);
 //# sourceMappingURL=conversation-session-prisma.repository.js.map

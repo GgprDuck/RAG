@@ -4,8 +4,9 @@ import { QdrantClient, Schemas } from '@qdrant/js-client-rest';
 import { QdrantCollectionConfigMapper } from './mappers/qdrant-collection-config.mapper';
 import { CollectionConfig } from 'src/rag/domain/value-objects/collection-config.vo';
 import { TRagConfig, RAG_CONFIG } from '../config/rag-config';
+import type { TextVectorSearchMode } from 'src/rag/domain/ports/text-vector-search.port';
 
-export type SearchMode = 'precise' | 'wide' | 'balanced';
+export type SearchMode = TextVectorSearchMode;
 
 const EF_BY_MODE: Record<SearchMode, number> = {
   precise:  512,

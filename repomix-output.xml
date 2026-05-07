@@ -1,0 +1,4128 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+The content has been processed where content has been compressed (code blocks are separated by ⋮---- delimiter).
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Content has been compressed - code blocks are separated by ⋮---- delimiter
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+memoryBank/
+  activecontext.md
+  decisionlog.md
+  productcontext.md
+  progress.md
+  projectbrief.md
+  systempatterns.md
+  techcontext.md
+prisma/
+  migrations/
+    20260216200912_init/
+      migration.sql
+    20260324123433_added_knowledge_link/
+      migration.sql
+    migration_lock.toml
+  schema.prisma
+  seed.d.ts
+  seed.js
+  seed.js.map
+  seed.ts
+src/
+  rag/
+    application/
+      commands/
+        ask-question.command.ts
+        delete-document.command.ts
+        delete-image.command.ts
+        extract-links.command.ts
+        get-all-documents.command.ts
+        get-all-images.command.ts
+        get-images-by-keyword.command.ts
+        process-images.command.ts
+        upload-folder.command.ts
+        upload-knowledge.command.ts
+      common/
+        interfaces/
+          image.interfaces.ts
+          rag-documents.interfaces.ts
+      guards/
+        prompt-injection.guard.ts
+      handlers/
+        ask-question.handler.ts
+        delete-document.handler.ts
+        delete-image.handler.ts
+        extract-links.handler.ts
+        get-all-documents.handler.ts
+        get-all-images.handler.ts
+        get-images-by-keyword.handler.ts
+        process-images.handler.ts
+        upload-folder.handler.ts
+        upload-knowledge.handler.ts
+      queries/
+        rag-query.handlers.ts
+        rag.queries.ts
+      services/
+        confidence.service.ts
+        image-rag.service.ts
+        link.service.ts
+        text-rag.service.ts
+      utils/
+        advanced-chunking.util.ts
+        contextual-compression.util.ts
+        embedding.util.ts
+        file-text.util.ts
+        hybrid-search.util.ts
+        link-extractor.util.ts
+        query-classefire.util.ts
+        query-transformer.util.ts
+        reranker.util.ts
+        text-chunk.util.ts
+        text-query.util.ts
+        transliteration.util.ts
+        word-parser.util.ts
+    domain/
+      entities/
+        image-document.entity.ts
+        text-document.entity.ts
+      interfaces/
+        ask-question.interface.ts
+        confidence.interface.ts
+        knowledge-link.interface.ts
+        upload-folder.interface.ts
+      ports/
+        cache.port.ts
+        chat-llm.port.ts
+        confidence.port.ts
+        conversation-session.repository.port.ts
+        embedding.port.ts
+        image-rag.port.ts
+        knowledge-graph.port.ts
+        storage.port.ts
+        textRagPort.ts
+      repositories/
+        image-document.repository.ts
+        knowledge-link-prisma.repository.ts
+        text-document.repository.ts
+      value-objects/
+        collection-config.vo.ts
+        embedding.vo.ts
+        similarity-score.vo.ts
+    infrastructure/
+      confidence/
+        confidence.module.ts
+      config/
+        rag-config.ts
+      mappers/
+        image-document.qdrant.mapper.ts
+        text-document.qdrant.mapper.ts
+      neo4j/
+        neo4j-knowledge-graph.service.ts
+        neo4j.module.ts
+      ollama/
+        ollama-chat.adapter.ts
+        ollama-embedding.adapter.ts
+        ollama.module.ts
+        ollama.service.ts
+      prisma/
+        repositories/
+          conversation-session-prisma.repository.ts
+        prisma.module.ts
+        prisma.service.ts
+      qdrant/
+        mappers/
+          qdrant-collection-config.mapper.ts
+        repositories/
+          qdrant-image-document.repository.ts
+          qdrant-text-document.repository.ts
+        qdrant.module.ts
+        rag-qdrant.service.ts
+      redis/
+        cache.module.ts
+        ioredis.adapter.ts
+        redis.module.ts
+        upstash.adapter.ts
+      s3/
+        s3.module.ts
+        s3.storage.service.ts
+    presentation/
+      api-response/
+        api-response.ts
+        meta.ts
+      controllers/
+        chat.controller.ts
+        image.controller.ts
+        link.controller.ts
+        rag-documents.controller.ts
+      dto/
+        ask.dto.ts
+        retrieve.dto.ts
+        upload-folder.dto.ts
+    shared/
+      application/
+        ports/
+          command-bus.port.ts
+          console.logger.adapter.ts
+          logger.port.ts
+      infrastructure/
+        command-bus.adapter.ts
+        command-bus.module.ts
+      nest/
+        filters/
+          all-exeption.filter.ts
+    rag.module.ts
+  app.module.ts
+  main.ts
+.cursorignore
+.dockerignore
+.gitignore
+docker-compose.yml
+Dockerfile
+nest-cli.json
+package.json
+README.md
+tsconfig.build.json
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="memoryBank/activecontext.md">
+# Active Context
+
+## Поточний фокус (квітень 2026)
+- Підвищити якість відповідей `POST /chat/ask` за рахунок кращого retrieval.
+- Знизити затримки (p95 latency) без втрати повноти контексту.
+- Зробити поведінку системи більш передбачуваною через явні guardrails і метрики.
+
+## Що вже є в системі
+- Базовий RAG-пайплайн на NestJS (Clean Architecture + CQRS).
+- Векторний пошук у Qdrant, knowledge graph у Neo4j, generation через Ollama.
+- Confidence scoring у чат-відповідях.
+- Redis, MinIO, PostgreSQL/Prisma як складові інфраструктури.
+
+## Актуальні проблеми / ризики
+- Таймаути сервера вимкнені (`setTimeout(0)`), що збільшує ризик "довгих" завислих запитів.
+- Поточний retrieval переважно векторний; бракує hybrid-механіки (vector + keyword/BM25).
+- Немає стабільного eval-набору для перевірки якості до/після змін.
+- Відсутня auth/multi-tenant модель (прийнятно для demo, але ризик для production).
+
+## Найближчі технічні кроки
+1. Зафіксувати baseline-метрики: `precision@k`, `recall@k`, `MRR`, `answer_groundedness`, `p95 latency`.
+2. Впровадити hybrid retrieval і reranker для top-N кандидатів.
+3. Переналаштувати chunking (chunk size, overlap, розбиття за структурою документа).
+4. Додати stage-level timeouts/retries/circuit breaker для Ollama, Qdrant, Neo4j.
+5. Додати трасування RAG-пайплайну (retrieved IDs, scores, confidence, latency per stage).
+
+## Definition of Ready для наступної ітерації
+- Є невеликий контрольний набір питань (20-50) для регресії.
+- Визначені SLO: `p95 latency`, `% grounded answers`, `% empty-context responses`.
+- Узгоджений формат відповіді API (structured output / schema).
+</file>
+
+<file path="memoryBank/decisionlog.md">
+# Decision Log
+
+## DL-001 — NestJS як основний фреймворк
+**Дата:** на момент ініціалізації проекту  
+**Рішення:** Використовувати NestJS замість Express/Fastify напряму  
+**Чому:** NestJS надає структурований DI-контейнер, модульну архітектуру, декоратори для Swagger та вбудований ValidationPipe. Зменшує boilerplate та полегшує тестування через DI.
+
+---
+
+## DL-002 — Clean Architecture + CQRS
+**Рішення:** Розбити код на `domain / application / infrastructure / presentation` + custom CommandBus  
+**Чому:** Ізоляція бізнес-логіки від інфраструктури дозволяє міняти БД/LLM без зміни application layer. CQRS дає явне розмежування read/write операцій.  
+**Trade-off:** Більше boilerplate (окремі Command DTO, Handler класи, Port-інтерфейси).
+
+---
+
+## DL-003 — Ollama замість OpenAI/Anthropic API
+**Рішення:** Всі LLM-запити через локальний Ollama  
+**Чому:** Демо-проект без зовнішніх API-ключів. Повна автономність через Docker.  
+**Моделі:** `gemma3:4b` (chat), `llama3.2-vision` (images), `nomic-embed-text` (embeddings)  
+**Trade-off:** Потребує локального GPU/CPU ресурсу; якість менша ніж GPT-4/Claude.
+
+---
+
+## DL-004 — Qdrant для векторного сховища
+**Рішення:** Qdrant v1.17.0 замість pgvector або Weaviate  
+**Чому:** Окремий high-performance vector store з REST/gRPC API. Підтримує окремі колекції для текстів і зображень.  
+**Trade-off:** Ще одна інфраструктурна залежність (але ізольована через ITextDocumentRepository/IImageDocumentRepository порти).
+
+---
+
+## DL-005 — Neo4j для Knowledge Graph
+**Рішення:** Neo4j 5.16 + APOC замість simple adjacency tables в Postgres  
+**Чому:** Граф зв'язків між сутностями природно лягає на граф-БД. APOC надає утиліти для traversal та аналізу.  
+**Trade-off:** Ще одна БД в стеку; потребує знань Cypher.
+
+---
+
+## DL-006 — PostgreSQL + Prisma для реляційних даних
+**Рішення:** Prisma ORM поверх PostgreSQL 16 для `KnowledgeLink` та інших реляційних сутностей  
+**Чому:** Type-safe queries, автоматичні міграції, зручний Prisma Client.  
+**Trade-off:** Prisma директорія виключена з tsconfig.build.json (потребує окремого generate кроку).
+
+---
+
+## DL-007 — MinIO як S3-compatible storage
+**Рішення:** MinIO замість AWS S3 для зберігання зображень  
+**Чому:** Локальний S3-сумісний сервіс → нульові хмарні витрати в dev. Bucket: `rag-images`.  
+**Trade-off:** В production можна замінити на AWS S3 простою заміною env vars.
+
+---
+
+## DL-008 — Server timeouts = 0
+**Рішення:** `server.setTimeout(0)`, `keepAliveTimeout = 0`, `headersTimeout = 0`  
+**Чому:** LLM inference через Ollama може займати десятки секунд. Node.js default timeouts обривали б запити.  
+**Trade-off:** Необмежений час відповіді → потенційні зависання з'єднань. Компенсується rate limiting.
+
+---
+
+## DL-009 — Rate limiting 20 req/год
+**Рішення:** `ThrottlerModule` з `limit: 20, ttl: 3600` як APP_GUARD  
+**Чому:** Захист від abuse при публічному деплої демо. LLM inference ресурсомістке.  
+**Trade-off:** Низький ліміт для production-use. Потребує збільшення або JWT-scope для реального продукту.
+
+---
+
+## DL-010 — Swagger тільки в non-production
+**Рішення:** Swagger UI підключається лише якщо `NODE_ENV !== 'production'`  
+**Чому:** Приховати внутрішній API від публічного доступу в production.
+</file>
+
+<file path="memoryBank/productcontext.md">
+# Product Context
+
+## Для кого цей продукт?
+
+**Первинні користувачі:**
+- Розробники, які хочуть побачити reference-implementation RAG на NestJS
+- Команди, що інтегрують RAG у власні продукти
+
+**Вторинні:**
+- Дослідники / ML-інженери, що тестують локальні LLM через Ollama
+
+## Навіщо він існує? (Problem Statement)
+
+Побудова RAG з нуля потребує інтеграції багатьох систем (векторна БД, граф знань, LLM, object storage). Цей проект — готовий шаблон із чистою архітектурою, який можна клонувати та адаптувати.
+
+## UX-цілі
+
+| Ціль | Як досягається |
+|------|---------------|
+| Простий onboarding | `docker compose up` — всі залежності піднімаються автоматично |
+| Зрозумілий API | Swagger UI на `/api` (dev/staging) |
+| Передбачувані відповіді | Confidence score у кожній відповіді чату |
+| Швидка ітерація | Hot-reload через nodemon (dev mode) |
+
+## Product KPIs (для найближчої ітерації)
+- Якість retrieval: `precision@k`, `recall@k`, `MRR`
+- Якість відповіді: `answer_groundedness`, `% empty-context responses`
+- Продуктивність: `p95 latency` для `POST /chat/ask`
+- Надійність: частка timeout/error для зовнішніх залежностей (Ollama/Qdrant/Neo4j)
+
+## User Journeys
+
+### Journey 1: Завантаження документу
+```
+POST /documents/upload  →  текст індексується в Qdrant  →  зв'язки зберігаються в Neo4j
+```
+
+### Journey 2: Запит до чату
+```
+POST /chat/ask  →  векторний пошук  →  confidence scoring  →  LLM генерація  →  відповідь
+```
+
+### Journey 3: Робота із зображеннями
+```
+POST /images/process  →  llama3.2-vision аналізує  →  embeddings у Qdrant  →  GET /images/search?keyword=...
+```
+
+### Journey 4: Посилання
+```
+POST /links/extract  →  витяг URL з документів  →  індексація контенту посилань
+```
+
+## Tone & Feel
+API-first продукт: відповіді структуровані, помилки обгорнуті в `AllExceptionsFilter`, валідація через class-validator.
+</file>
+
+<file path="memoryBank/progress.md">
+# Progress
+
+## Статус на зараз
+**Фаза:** стабілізація і якісне покращення RAG (після збирання базового end-to-end MVP).
+
+## Що вже завершено
+- Побудований API-first RAG сервіс на NestJS.
+- Реалізоване завантаження/індексація текстових документів і зображень.
+- Підключені ключові компоненти: Qdrant, Neo4j, PostgreSQL/Prisma, MinIO, Redis, Ollama.
+- Запущений базовий chat flow: retrieval -> confidence scoring -> generation.
+- Додані базові production-запобіжники: `helmet`, `ThrottlerGuard`, env-based CORS, exception filter.
+
+## Що зараз у роботі
+- Формалізація метрик якості retrieval і відповіді.
+- План переходу до hybrid retrieval та reranking.
+- Підготовка технічного плану для latency control і observability.
+
+## Baseline метрики (потрібно зафіксувати у першому прогоні)
+- Якість retrieval: `precision@k`, `recall@k`, `MRR`.
+- Якість відповіді: `answer_groundedness`, `% empty-context responses`.
+- Продуктивність: `p50/p95 latency`, частка timeout/error запитів.
+
+## Roadmap (коротко)
+1. **Wave A (Retrieval Quality):** hybrid retrieval + reranker + tuning chunking.
+2. **Wave B (Generation Quality):** prompt templates, structured output, confidence guardrails.
+3. **Wave C (Reliability/Perf):** cache, adaptive top-k, stage-level timeout/retry/circuit-breaker.
+4. **Wave D (Observability/Eval):** pipeline tracing, eval-set (20-50), релізний regression gate.
+
+## Ризики
+- Відключені глобальні таймаути можуть маскувати деградацію на зовнішніх залежностях.
+- Відсутність регулярного eval циклу ускладнює доказове покращення якості.
+- Поточний rate-limit підходить для demo, але не для production-навантаження.
+
+## Критерії завершення поточної фази
+- Є baseline і повторний after-change прогін на одному eval-наборі.
+- Покращено `precision@k`/`MRR` без погіршення `p95 latency` понад погоджений поріг.
+- Для ключових endpoint-ів є прозоре трасування і зрозуміла причина деградацій.
+</file>
+
+<file path="memoryBank/projectbrief.md">
+# Project Brief
+
+## Що це за проект?
+
+**RAG Demo API** — бекенд-сервіс для демонстрації Retrieval-Augmented Generation (RAG).  
+Надає HTTP API для завантаження, індексування та семантичного пошуку по текстових і графічних документах з подальшою генерацією відповідей через LLM.
+
+## Мета проекту
+
+Показати повноцінний RAG-пайплайн:
+1. Завантаження документів (текст / зображення / папки / посилання)
+2. Векторне індексування через Qdrant
+3. Побудова графу знань через Neo4j
+4. Семантичний пошук + re-ranking за confidence score
+5. Генерація відповіді через Ollama LLM
+
+## Scope (PRD-рівень)
+
+### In scope
+- REST API для управління текстовими документами (CRUD + пошук)
+- REST API для управління зображеннями (завантаження, пошук за ключовим словом)
+- Chat endpoint (питання → RAG відповідь)
+- Витяг та індексація посилань з документів
+- Knowledge graph (Neo4j) для зв'язків між сутностями
+- Confidence scoring для оцінки якості відповіді
+- Rate limiting (20 req/год на IP)
+- Swagger документація (тільки в non-production)
+
+### Out of scope (поточна версія)
+- Авторизація / автентифікація користувачів
+- Multi-tenancy
+
+## Ключові обмеження
+- Timeout сервера відключено (`setTimeout(0)`) — для довгих LLM-запитів
+- Production потребує явного `ALLOWED_ORIGINS`
+- Rate limit: 20 запитів на 1 годину (ThrottlerModule)
+
+## Фокус наступної ітерації
+- Retrieval quality: `hybridRetrieve` + `rerankTopN` + tuning chunking.
+- Reliability/performance: stage-level timeout/retry/circuit-breaker замість суто глобального підходу.
+- Observability/eval: telemetry по етапах пайплайну та baseline/after-change вимірювання.
+</file>
+
+<file path="memoryBank/systempatterns.md">
+# System Patterns
+
+## Архітектурний стиль
+
+**Clean Architecture + DDD + CQRS**
+
+```
+src/rag/
+├── domain/           # Entities, Value Objects, Repository interfaces
+├── application/      # Commands, Queries, Handlers, Services, Guards
+├── infrastructure/   # Adapters: Qdrant, Neo4j, Prisma, Ollama, S3, Redis
+├── presentation/     # HTTP Controllers
+└── shared/           # Ports (interfaces), CommandBus, NestJS filters
+```
+
+## CQRS через Custom CommandBus
+
+Всі операції реєструються через `CommandBusPort`:
+
+```typescript
+// Реєстрація (onModuleInit)
+this.bus.register(AskQuestionCommand, this.askQuestion);
+this.bus.register(UploadKnowledgeCommand, this.uploadKnowledge);
+// ...
+
+// Виклик з контролера
+await this.bus.execute(new AskQuestionCommand(...));
+```
+
+**Команди (write side):**
+- `AskQuestionCommand` → `AskQuestionHandler`
+- `UploadKnowledgeCommand` → `UploadKnowledgeHandler`
+- `DeleteDocumentCommand` → `DeleteDocumentHandler`
+- `ProcessImagesCommand` → `ProcessImagesHandler`
+- `DeleteImageCommand` → `DeleteImageHandler`
+- `UploadFolderCommand` → `UploadFolderHandler`
+- `IndexLinksCommand` → `ExtractLinksHandler`
+
+**Запити (read side):**
+- `GetAllDocumentsQuery` → `GetAllDocumentsHandler`
+- `GetAllImagesQuery` → `GetAllImagesHandler`
+- `GetImagesByKeywordQuery` → `GetImagesByKeywordHandler`
+- `RetrieveDocumentsQuery` → `RetrieveDocumentsHandler`
+
+## Цільовий RAG-пайплайн (ітерація покращення)
+Єдиний термін для етапів запиту:
+1. `queryNormalize`
+2. `hybridRetrieve` (vector + keyword/BM25)
+3. `rerankTopN` (cross-encoder)
+4. `contextBuild`
+5. `llmGenerate`
+6. `confidenceGate`
+7. `telemetryEmit`
+
+Ці назви використовуються в `activecontext.md` / `progress.md` / KPI-звітах, щоб уникнути розбіжностей.
+
+## Dependency Injection Tokens (Ports)
+
+Всі залежності прив'язані через string tokens:
+
+```typescript
+{ provide: 'LoggerPort',               useClass: ConsoleLoggerAdapter }
+{ provide: 'IEmbeddingPort',           useClass: OllamaEmbeddingAdapter }
+{ provide: 'IChatLlmPort',             useClass: OllamaChatAdapter }
+{ provide: 'ITextDocumentRepository',  useExisting: QdrantTextDocumentRepository }
+{ provide: 'IImageDocumentRepository', useExisting: QdrantImageDocumentRepository }
+{ provide: 'IStoragePort',             useExisting: S3StorageService }
+{ provide: 'IKnowledgeGraphPort',      useClass: Neo4jKnowledgeGraphService }
+{ provide: 'TextRagPort',              useClass: TextRagService }
+{ provide: 'ImageRagPort',             useClass: ImageRagService }
+{ provide: 'IConfidencePort',          useExisting: ConfidenceService }
+{ provide: 'IKnowledgeLinkRepository', useExisting: KnowledgeLinkPrismaRepository }
+```
+
+## Контролери
+
+| Controller | Base path | Відповідальність |
+|------------|-----------|-----------------|
+| `RagDocumentsController` | `/documents` | CRUD + пошук текстових документів |
+| `RagImagesController` | `/images` | Завантаження та пошук зображень |
+| `ChatController` | `/chat` | Q&A через RAG |
+| `LinksController` | `/links` | Витяг та індексація посилань |
+
+## Конвенції
+
+### Модулі NestJS
+Кожна інфраструктурна залежність = окремий NestJS Module:
+`OllamaModule`, `S3Module`, `QdrantModule`, `PrismaModule`, `Neo4jModule`, `RedisModule`, `CacheModule`
+
+### Конфіг
+- `ragConfig` — typed config factory через `@nestjs/config`
+- Global `ConfigModule` в `AppModule`, feature config у `RagModule`
+
+### Валідація
+- `ValidationPipe` з `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`
+- Зайві поля автоматично відкидаються
+
+### Error handling
+- `AllExceptionsFilter` (global) — уніфікований формат помилок
+
+### Security
+- `helmet()` — HTTP security headers
+- `ThrottlerGuard` як `APP_GUARD` — rate limiting на рівні всього додатку
+</file>
+
+<file path="memoryBank/techcontext.md">
+# Tech Context
+
+## Мова та рантайм
+- **TypeScript** (Node.js 20, Alpine)
+- **NestJS** — основний фреймворк
+- Компіляція: `tsc` → `dist/`, entry: `dist/main.js`
+
+## Ключові залежності (з rag.module.ts та docker-compose)
+
+### Application Framework
+| Пакет | Роль |
+|-------|------|
+| `@nestjs/core` | DI, lifecycle |
+| `@nestjs/swagger` | OpenAPI / Swagger |
+| `@nestjs/throttler` | Rate limiting (20 req/год) |
+| `@nestjs/config` | Конфігурація через env |
+| `class-validator` | Validation pipe |
+| `helmet` | HTTP security headers |
+
+### LLM / AI
+| Сервіс | Модель | Роль |
+|--------|--------|------|
+| Ollama | `gemma3:4b` | Chat / text generation |
+| Ollama | `llama3.2-vision:latest` | Image analysis |
+| Ollama | `nomic-embed-text:latest` | Text embeddings |
+
+### Бази даних
+| Сервіс | Версія | Роль |
+|--------|--------|------|
+| Qdrant | v1.17.0 | Векторна БД (текст + зображення) |
+| PostgreSQL | 16-alpine | Реляційні дані (knowledge links) |
+| Neo4j | 5.16.0 + APOC | Knowledge graph |
+| Redis | 7-alpine | Кешування |
+
+### Storage
+- **MinIO** (S3-compatible) — зберігання зображень, bucket: `rag-images`
+
+## Ports та endpoints (docker-compose)
+```
+API:        localhost:3000
+Qdrant:     localhost:6333
+MinIO API:  localhost:9000
+MinIO UI:   localhost:9001
+Ollama:     localhost:11434
+PostgreSQL: localhost:5432
+Neo4j HTTP: localhost:7474
+Neo4j Bolt: localhost:7687
+Redis:      localhost:6379
+```
+
+## Build / Test / Deploy
+
+### Локальний запуск
+```bash
+docker compose up --build
+```
+Ollama-init контейнер автоматично витягує моделі (`pull`) при першому старті.
+
+### Build (production)
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm i
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["node", "dist/main.js"]
+```
+
+### Env vars (обов'язкові для production)
+```
+ALLOWED_ORIGINS=https://your-frontend.com
+POSTGRES_USER / POSTGRES_PASSWORD
+NEO4J_USER / NEO4J_PASSWORD
+S3_ACCESS_KEY / S3_SECRET_KEY
+```
+
+### tsconfig
+- `tsconfig.build.json` — excludes: `node_modules`, `test`, `dist`, `**/*spec.ts`, `prisma`
+
+## Важливо
+- Server timeouts = **0** (відключені навмисно для LLM-запитів)
+- CORS: в dev — `origin: true`; в prod — тільки `ALLOWED_ORIGINS`
+
+## Baseline evaluation protocol (поточний стандарт)
+1. Сформувати контрольний набір 20-50 питань (фактологічні + багатокрокові + negative queries).
+2. Для кожного запиту зберігати:
+   - retrieved document IDs (top-k),
+   - rerank scores (за наявності),
+   - фінальний confidence,
+   - latency по етапах (`hybridRetrieve`, `rerankTopN`, `llmGenerate`).
+3. Рахувати метрики:
+   - retrieval: `precision@k`, `recall@k`, `MRR`,
+   - answer: `answer_groundedness`, `% empty-context responses`,
+   - performance: `p50/p95 latency`, `% timeout/error`.
+4. Будь-яке покращення вважається валідним лише після порівняння before/after на одному і тому ж eval-наборі.
+</file>
+
+<file path=".cursorignore">
+node_modules
+.env
+dist
+</file>
+
+<file path="prisma/migrations/20260216200912_init/migration.sql">
+-- CreateTable
+CREATE TABLE "conversation_sessions" (
+    "id" UUID NOT NULL,
+    "session_id" VARCHAR(255) NOT NULL,
+    "query" TEXT NOT NULL,
+    "answer" TEXT NOT NULL,
+    "embedding" REAL[],
+    "timestamp" TIMESTAMPTZ(6) NOT NULL,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "conversation_sessions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "conversation_sessions_session_id_timestamp_idx" ON "conversation_sessions"("session_id", "timestamp");
+
+-- CreateIndex
+CREATE INDEX "conversation_sessions_session_id_idx" ON "conversation_sessions"("session_id");
+
+-- CreateIndex
+CREATE INDEX "conversation_sessions_timestamp_idx" ON "conversation_sessions"("timestamp");
+</file>
+
+<file path="prisma/migrations/20260324123433_added_knowledge_link/migration.sql">
+-- CreateTable
+CREATE TABLE "knowledge_links" (
+    "id" UUID NOT NULL,
+    "url" TEXT NOT NULL,
+    "label" VARCHAR(500) NOT NULL,
+    "context" TEXT NOT NULL,
+    "sourceFile" VARCHAR(500) NOT NULL,
+    "linkType" VARCHAR(50) NOT NULL,
+    "keywords" TEXT[],
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "knowledge_links_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "knowledge_links_label_idx" ON "knowledge_links"("label");
+
+-- CreateIndex
+CREATE INDEX "knowledge_links_keywords_idx" ON "knowledge_links"("keywords");
+</file>
+
+<file path="prisma/migrations/migration_lock.toml">
+# Please do not edit this file manually
+# It should be added in your version-control system (e.g., Git)
+provider = "postgresql"
+</file>
+
+<file path="prisma/seed.d.ts">
+
+</file>
+
+<file path="prisma/seed.js">
+async function main()
+⋮----
+//# sourceMappingURL=seed.js.map
+</file>
+
+<file path="prisma/seed.js.map">
+{"version":3,"file":"seed.js","sourceRoot":"","sources":["seed.ts"],"names":[],"mappings":";;AAAA,2CAA8C;AAE9C,MAAM,MAAM,GAAG,IAAI,qBAAY,EAAE,CAAC;AAElC,KAAK,UAAU,IAAI;IACjB,OAAO,CAAC,GAAG,CAAC,kBAAkB,CAAC,CAAC;IAEhC,MAAM,QAAQ,GAAG,MAAM,MAAM,CAAC,mBAAmB,CAAC,MAAM,CAAC;QACvD,IAAI,EAAE;YACJ,SAAS,EAAE,gBAAgB;YAC3B,KAAK,EAAE,cAAc;YACrB,MAAM,EAAE,wKAAwK;YAChL,SAAS,EAAE,IAAI,IAAI,CAAC,sBAAsB,CAAC;YAC3C,SAAS,EAAE,KAAK,CAAC,GAAG,CAAC,CAAC,IAAI,CAAC,CAAC,CAAC,CAAC,GAAG,CAAC,GAAG,EAAE,CAAC,IAAI,CAAC,MAAM,EAAE,CAAC;SACvD;KACF,CAAC,CAAC;IAEH,MAAM,QAAQ,GAAG,MAAM,MAAM,CAAC,mBAAmB,CAAC,MAAM,CAAC;QACvD,IAAI,EAAE;YACJ,SAAS,EAAE,gBAAgB;YAC3B,KAAK,EAAE,8BAA8B;YACrC,MAAM,EAAE,6KAA6K;YACrL,SAAS,EAAE,IAAI,IAAI,CAAC,sBAAsB,CAAC;YAC3C,SAAS,EAAE,KAAK,CAAC,GAAG,CAAC,CAAC,IAAI,CAAC,CAAC,CAAC,CAAC,GAAG,CAAC,GAAG,EAAE,CAAC,IAAI,CAAC,MAAM,EAAE,CAAC;SACvD;KACF,CAAC,CAAC;IAEH,MAAM,QAAQ,GAAG,MAAM,MAAM,CAAC,mBAAmB,CAAC,MAAM,CAAC;QACvD,IAAI,EAAE;YACJ,SAAS,EAAE,gBAAgB;YAC3B,KAAK,EAAE,oBAAoB;YAC3B,MAAM,EAAE,kLAAkL;YAC1L,SAAS,EAAE,IAAI,IAAI,CAAC,sBAAsB,CAAC;YAC3C,SAAS,EAAE,KAAK,CAAC,GAAG,CAAC,CAAC,IAAI,CAAC,CAAC,CAAC,CAAC,GAAG,CAAC,GAAG,EAAE,CAAC,IAAI,CAAC,MAAM,EAAE,CAAC;SACvD;KACF,CAAC,CAAC;IAEH,OAAO,CAAC,GAAG,CAAC,mBAAmB,CAAC,CAAC;IACjC,OAAO,CAAC,GAAG,CAAC,EAAE,QAAQ,EAAE,QAAQ,EAAE,QAAQ,EAAE,CAAC,CAAC;AAChD,CAAC;AAED,IAAI,EAAE;KACH,IAAI,CAAC,KAAK,IAAI,EAAE;IACf,MAAM,MAAM,CAAC,WAAW,EAAE,CAAC;AAC7B,CAAC,CAAC;KACD,KAAK,CAAC,KAAK,EAAE,CAAC,EAAE,EAAE;IACjB,OAAO,CAAC,KAAK,CAAC,CAAC,CAAC,CAAC;IACjB,MAAM,MAAM,CAAC,WAAW,EAAE,CAAC;IAC3B,OAAO,CAAC,IAAI,CAAC,CAAC,CAAC,CAAC;AAClB,CAAC,CAAC,CAAC"}
+</file>
+
+<file path="prisma/seed.ts">
+import { PrismaClient } from '@prisma/client';
+⋮----
+async function main()
+</file>
+
+<file path="src/rag/application/commands/ask-question.command.ts">
+import { AskQuestionOptions } from "../../domain/interfaces/ask-question.interface";
+⋮----
+export class AskQuestionCommand
+⋮----
+constructor(
+</file>
+
+<file path="src/rag/application/commands/delete-document.command.ts">
+export class DeleteDocumentCommand
+⋮----
+constructor(public readonly id: string)
+</file>
+
+<file path="src/rag/application/commands/delete-image.command.ts">
+export class DeleteImageCommand
+⋮----
+constructor(public readonly id: string)
+</file>
+
+<file path="src/rag/application/commands/extract-links.command.ts">
+export class IndexLinksCommand
+⋮----
+constructor(
+</file>
+
+<file path="src/rag/application/commands/get-all-documents.command.ts">
+export class GetAllDocumentsCommand
+</file>
+
+<file path="src/rag/application/commands/get-all-images.command.ts">
+export class GetAllImagesCommand
+⋮----
+constructor(public readonly limit = 1000)
+</file>
+
+<file path="src/rag/application/commands/get-images-by-keyword.command.ts">
+export class GetImagesByKeywordCommand
+⋮----
+constructor(
+</file>
+
+<file path="src/rag/application/commands/process-images.command.ts">
+export class ProcessImagesCommand
+⋮----
+constructor(public readonly files: Express.Multer.File[])
+</file>
+
+<file path="src/rag/application/commands/upload-folder.command.ts">
+import { IUploadedFile } from 'src/rag/domain/interfaces/upload-folder.interface';
+⋮----
+export interface UploadFolderOptions {
+  chunkingStrategy?: 'simple' | 'semantic' | 'parent-child';
+  enableKnowledgeGraph?: boolean;
+  parentChild?: {
+    parentSize?: number;
+    childSize?: number;
+    overlap?: number;
+    storeParentText?: boolean;
+    useMarkdownHeaders?: boolean;
+  };
+}
+⋮----
+export class UploadFolderCommand
+⋮----
+constructor(
+</file>
+
+<file path="src/rag/application/commands/upload-knowledge.command.ts">
+import { IUploadedFile } from "src/rag/domain/interfaces/upload-folder.interface";
+⋮----
+export interface UploadKnowledgeOptions {
+  chunkingStrategy?: 'simple' | 'semantic' | 'parent-child';
+  enableKnowledgeGraph?: boolean;
+}
+⋮----
+export class UploadKnowledgeCommand
+⋮----
+constructor(
+</file>
+
+<file path="src/rag/application/common/interfaces/image.interfaces.ts">
+import { Embedding } from 'src/rag/domain/value-objects/embedding.vo';
+import { SimilarityScore } from 'src/rag/domain/value-objects/similarity-score.vo';
+⋮----
+export interface IUploadImage {
+  imagesUploaded: number;
+}
+⋮----
+export interface IDeleteImage {
+  deletedImageId: string;
+}
+⋮----
+export interface IImageWithScore extends IImageWithoutScore {
+  s3Key: string;
+  similarityScore?: SimilarityScore;
+  embedding: Embedding | number[];
+}
+⋮----
+export interface IImageWithoutScore {
+  id: string;
+  s3Url: string;
+  mimeType: string;
+  description?: string;
+  keywords: string[];
+  createdAt: string;
+  model: string;
+}
+</file>
+
+<file path="src/rag/application/guards/prompt-injection.guard.ts">
+import { BadRequestException } from '@nestjs/common';
+⋮----
+export class PromptInjectionGuard
+⋮----
+static assertSafe(input: string): void
+</file>
+
+<file path="src/rag/application/handlers/ask-question.handler.ts">
+import { Injectable, Inject, BadRequestException } from "@nestjs/common";
+import { IConfidencePort } from "src/rag/domain/ports/confidence.port";
+import { TextRagPort } from "src/rag/domain/ports/textRagPort";
+import { LoggerPort } from "src/rag/shared/application/ports/logger.port";
+import { AskQuestionCommand } from "../commands/ask-question.command";
+import { IGenerateAnswer, IStreamChunk } from "../common/interfaces/rag-documents.interfaces";
+⋮----
+export class AskQuestionHandler
+⋮----
+constructor(
+⋮----
+async execute(cmd: AskQuestionCommand): Promise<IGenerateAnswer>
+⋮----
+streamableExecute(cmd: AskQuestionCommand): AsyncGenerator<IStreamChunk>
+</file>
+
+<file path="src/rag/application/handlers/delete-document.handler.ts">
+import { Inject, Injectable, BadRequestException } from '@nestjs/common';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { DeleteDocumentCommand } from '../commands/delete-document.command';
+import { TextRagPort } from 'src/rag/domain/ports/textRagPort';
+import { IDeleteDocument } from '../common/interfaces/rag-documents.interfaces';
+⋮----
+export class DeleteDocumentHandler
+⋮----
+constructor(
+⋮----
+async execute(cmd: DeleteDocumentCommand): Promise<IDeleteDocument>
+</file>
+
+<file path="src/rag/application/handlers/delete-image.handler.ts">
+import { Inject, Injectable, BadRequestException } from '@nestjs/common';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { DeleteImageCommand } from '../commands/delete-image.command';
+import { IDeleteImage } from '../common/interfaces/image.interfaces';
+import { ImageRagPort } from 'src/rag/domain/ports/image-rag.port';
+⋮----
+export class DeleteImageHandler
+⋮----
+constructor(
+⋮----
+async execute(cmd: DeleteImageCommand): Promise<IDeleteImage>
+</file>
+
+<file path="src/rag/application/handlers/extract-links.handler.ts">
+import { Inject, Injectable } from '@nestjs/common';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { LinkService } from '../services/link.service';
+import { IndexLinksCommand } from '../commands/extract-links.command';
+⋮----
+export class ExtractLinksHandler
+⋮----
+constructor(
+⋮----
+async execute(
+    command: IndexLinksCommand,
+): Promise<
+</file>
+
+<file path="src/rag/application/handlers/get-all-documents.handler.ts">
+import { Inject, Injectable, BadRequestException } from '@nestjs/common';
+import { TextRagPort } from 'src/rag/domain/ports/textRagPort';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { GetAllDocumentsCommand } from '../commands/get-all-documents.command';
+import { IDocumentWithoutEmbedding } from '../common/interfaces/rag-documents.interfaces';
+⋮----
+export class GetAllDocumentsHandler
+⋮----
+constructor(
+⋮----
+async execute(
+    _cmd: GetAllDocumentsCommand,
+): Promise<Array<IDocumentWithoutEmbedding>>
+</file>
+
+<file path="src/rag/application/handlers/get-all-images.handler.ts">
+import { Inject, Injectable } from '@nestjs/common';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { IImageWithoutScore } from '../common/interfaces/image.interfaces';
+import { ImageRagPort } from 'src/rag/domain/ports/image-rag.port';
+import { GetAllImagesCommand } from '../commands/get-all-images.command';
+⋮----
+export class GetAllImagesHandler
+⋮----
+constructor(
+⋮----
+async execute(cmd: GetAllImagesCommand): Promise<Array<IImageWithoutScore>>
+</file>
+
+<file path="src/rag/application/handlers/get-images-by-keyword.handler.ts">
+import { Inject, Injectable, BadRequestException } from '@nestjs/common';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { GetImagesByKeywordCommand } from '../commands/get-images-by-keyword.command';
+import { IImageWithScore } from '../common/interfaces/image.interfaces';
+import { ImageRagPort } from 'src/rag/domain/ports/image-rag.port';
+⋮----
+export class GetImagesByKeywordHandler
+⋮----
+constructor(
+⋮----
+async execute(
+    cmd: GetImagesByKeywordCommand,
+): Promise<Array<IImageWithScore>>
+</file>
+
+<file path="src/rag/application/handlers/process-images.handler.ts">
+import { Inject, Injectable, BadRequestException } from '@nestjs/common'
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { ProcessImagesCommand } from '../commands/process-images.command';
+import { IUploadImage } from '../common/interfaces/image.interfaces';
+import { ImageRagPort } from 'src/rag/domain/ports/image-rag.port';
+⋮----
+export class ProcessImagesHandler
+⋮----
+constructor(
+⋮----
+async execute(cmd: ProcessImagesCommand): Promise<IUploadImage>
+</file>
+
+<file path="src/rag/application/handlers/upload-folder.handler.ts">
+import { Inject, Injectable } from '@nestjs/common';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { UploadFolderCommand } from '../commands/upload-folder.command';
+import { TextRagPort } from 'src/rag/domain/ports/textRagPort';
+⋮----
+export class UploadFolderHandler
+⋮----
+constructor(
+⋮----
+async execute(
+    cmd: UploadFolderCommand,
+): Promise<
+</file>
+
+<file path="src/rag/application/handlers/upload-knowledge.handler.ts">
+import { Inject, Injectable, BadRequestException } from '@nestjs/common';
+import { UploadKnowledgeCommand } from '../commands/upload-knowledge.command';
+import { TextRagPort } from 'src/rag/domain/ports/textRagPort';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { IUploadKnowledge } from '../common/interfaces/rag-documents.interfaces';
+⋮----
+export class UploadKnowledgeHandler
+⋮----
+constructor(
+⋮----
+async execute(cmd: UploadKnowledgeCommand): Promise<IUploadKnowledge>
+</file>
+
+<file path="src/rag/application/queries/rag-query.handlers.ts">
+import { Injectable, Inject } from "@nestjs/common";
+import { LoggerPort } from "src/rag/shared/application/ports/logger.port";
+import { IImageWithoutScore, IImageWithScore } from "../common/interfaces/image.interfaces";
+import { IDocumentWithoutEmbedding, IDocumentWithEmbedding } from "../common/interfaces/rag-documents.interfaces";
+import { GetAllDocumentsQuery, GetAllImagesQuery, GetImagesByKeywordQuery, RetrieveDocumentsQuery } from "./rag.queries";
+import { ImageRagPort } from "src/rag/domain/ports/image-rag.port";
+import { TextRagPort } from "src/rag/domain/ports/textRagPort";
+⋮----
+export class GetAllDocumentsHandler
+⋮----
+constructor(
+⋮----
+async execute(_query: GetAllDocumentsQuery): Promise<IDocumentWithoutEmbedding[]>
+⋮----
+export class GetAllImagesHandler
+⋮----
+async execute(query: GetAllImagesQuery): Promise<IImageWithoutScore[]>
+⋮----
+export class GetImagesByKeywordHandler
+⋮----
+async execute(query: GetImagesByKeywordQuery): Promise<IImageWithScore[]>
+⋮----
+export class RetrieveDocumentsHandler
+⋮----
+async execute(query: RetrieveDocumentsQuery): Promise<IDocumentWithEmbedding[] | string>
+</file>
+
+<file path="src/rag/application/queries/rag.queries.ts">
+export class GetAllDocumentsQuery
+⋮----
+export class GetAllImagesQuery
+⋮----
+constructor(public readonly limit?: number)
+⋮----
+export class GetImagesByKeywordQuery
+⋮----
+constructor(
+⋮----
+export class RetrieveDocumentsQuery
+</file>
+
+<file path="src/rag/application/services/confidence.service.ts">
+import { Injectable, Inject, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  ConfidenceThresholds,
+  ConfidenceScore,
+  VerificationResult,
+  ConfidenceTier,
+} from 'src/rag/domain/interfaces/confidence.interface';
+import { IConfidencePort } from 'src/rag/domain/ports/confidence.port';
+⋮----
+interface IEmbeddingPort {
+  embed(text: string): Promise<number[]>;
+}
+⋮----
+embed(text: string): Promise<number[]>;
+⋮----
+interface IChatLlmPort {
+  complete(prompt: string): Promise<string>;
+}
+⋮----
+complete(prompt: string): Promise<string>;
+⋮----
+export class ConfidenceService implements IConfidencePort
+⋮----
+constructor(
+⋮----
+async computeScore(
+    answer: string,
+    retrievedChunks: string[],
+    thresholds?: Partial<ConfidenceThresholds>,
+): Promise<ConfidenceScore>
+⋮----
+async verify(
+    answer: string,
+    retrievedChunks: string[],
+    thresholds?: Partial<ConfidenceThresholds>,
+): Promise<VerificationResult>
+⋮----
+private async llmRelevanceScore(answer: string, context: string): Promise<number>
+⋮----
+private async safeEmbed(text: string): Promise<number[] | null>
+⋮----
+private trimForEmbedding(text: string): string
+⋮----
+private scoreTier(score: number, t: ConfidenceThresholds): ConfidenceTier
+⋮----
+private resolveThresholds(override?: Partial<ConfidenceThresholds>): ConfidenceThresholds
+⋮----
+private filterChunksByKeywords(chunks: string[], question: string): string[]
+⋮----
+function cosineSimilarity(a: number[], b: number[]): number
+</file>
+
+<file path="src/rag/application/services/image-rag.service.ts">
+import { Injectable, Inject, InternalServerErrorException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { v4 as uuidv4 } from 'uuid';
+import { IImageDocumentRepository } from '../../domain/repositories/image-document.repository';
+import { ImageDocument } from '../../domain/entities/image-document.entity';
+import { Embedding } from '../../domain/value-objects/embedding.vo';
+import { SimilarityScore } from '../../domain/value-objects/similarity-score.vo';
+import { extractEmbedding } from '../utils/embedding.util';
+import { levenshteinDistance, parseQueryWithNegation } from '../utils/text-query.util';
+import { RAG_CONFIG, TRagConfig } from '../../infrastructure/config/rag-config';
+import { IUploadedFile } from 'src/rag/domain/interfaces/upload-folder.interface';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { IUploadImage, IDeleteImage, IImageWithScore, IImageWithoutScore } from '../common/interfaces/image.interfaces';
+import { IStoragePort } from 'src/rag/domain/ports/storage.port';
+import { IChatLlmPort } from 'src/rag/domain/ports/chat-llm.port';
+import { IEmbeddingPort } from 'src/rag/domain/ports/embedding.port';
+import { ImageRagPort } from 'src/rag/domain/ports/image-rag.port';
+⋮----
+export class ImageRagService implements ImageRagPort
+⋮----
+constructor(
+⋮----
+async uploadImages(files: IUploadedFile[]): Promise<IUploadImage>
+⋮----
+async deleteImageById(id: string): Promise<IDeleteImage>
+⋮----
+async getImagesByKeyword(query: string, limit = 10): Promise<Array<IImageWithScore>>
+⋮----
+async getAllImages(limit = 1000): Promise<Array<IImageWithoutScore>>
+</file>
+
+<file path="src/rag/application/utils/advanced-chunking.util.ts">
+import { Logger } from '@nestjs/common';
+import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+⋮----
+export interface ChunkMetadata {
+  chunkId: string;
+  parentId?: string;
+  childIds?: string[];
+  level: number;
+  startIndex: number;
+  endIndex: number;
+  headers?: string[];
+  parentText?: string;
+  sectionHeader?: string;
+}
+⋮----
+export interface SemanticChunk {
+  text: string;
+  metadata: ChunkMetadata;
+}
+⋮----
+export function splitIntoSentences(text: string): string[]
+⋮----
+export async function semanticChunking(
+  text: string,
+  ollamaService: OllamaService,
+  options: {
+    minChunkSize?: number;
+    maxChunkSize?: number;
+    similarityThreshold?: number;
+  } = {},
+): Promise<SemanticChunk[]>
+⋮----
+function findBoundary(text: string, target: number, windowSize = 200): number
+⋮----
+interface MdSection {
+  header: string | null;
+  text: string;
+  offset: number;
+}
+⋮----
+function splitMarkdownSections(text: string): MdSection[]
+⋮----
+export interface ParentChildOptions {
+  parentSize?: number;
+  childSize?: number;
+  overlap?: number;
+  fileId?: string;
+  storeParentText?: boolean;
+  useMarkdownHeaders?: boolean;
+}
+⋮----
+export async function parentChildChunking(
+  text: string,
+  onChunk: (chunk: SemanticChunk) => Promise<void>,
+  options: ParentChildOptions = {},
+): Promise<void>
+⋮----
+function averageEmbeddings(a: number[], b: number[], wa = 1, wb = 1): number[]
+⋮----
+function cosineSimilarity(a: number[], b: number[]): number
+</file>
+
+<file path="src/rag/application/utils/embedding.util.ts">
+type EmbeddingObject = { embedding?: number[] };
+type EmbeddingDataObject = { data?: Array<{ embedding?: number[] }> };
+⋮----
+export function extractEmbedding(input: unknown): number[]
+</file>
+
+<file path="src/rag/application/utils/file-text.util.ts">
+import { extractWordText } from './word-parser.util';
+import pdf from '@cedrugs/pdf-parse';
+⋮----
+export async function extractFileText(
+  file: Express.Multer.File,
+): Promise<string>
+⋮----
+function assertValidEncoding(text: string, filename: string): void
+⋮----
+function normalizeText(text: string): string
+⋮----
+function normalizeMarkdown(md: string): string
+</file>
+
+<file path="src/rag/application/utils/text-chunk.util.ts">
+export type ChunkOptions = {
+  minWords?: number;
+  maxWords?: number;
+  overlap?: number;
+  preserveParagraphs?: boolean;
+};
+⋮----
+export interface Chunk {
+  text: string;
+  startIndex: number;
+  endIndex: number;
+  metadata?: Record<string, any>;
+}
+⋮----
+export function advancedChunkText(
+  text: string,
+  {
+    minWords = 50,
+    maxWords = 200,
+    overlap = 20,
+    preserveParagraphs = true,
+  }: ChunkOptions = {},
+): Chunk[]
+⋮----
+export function chunkTextBySentences(
+  text: string,
+  { minWords = 50, maxWords = 150 }: ChunkOptions = {},
+): string[]
+⋮----
+function splitIntoSentences(text: string): string[]
+⋮----
+function countWords(text: string): number
+</file>
+
+<file path="src/rag/application/utils/text-query.util.ts">
+export function levenshteinDistance(a: string, b: string): number
+⋮----
+export function parseQueryWithNegation(query: string):
+</file>
+
+<file path="src/rag/application/utils/word-parser.util.ts">
+async function extractWordText(buffer: Buffer): Promise<string>
+</file>
+
+<file path="src/rag/domain/entities/image-document.entity.ts">
+import { Embedding } from '../value-objects/embedding.vo';
+import { SimilarityScore } from '../value-objects/similarity-score.vo';
+⋮----
+export class ImageDocument
+⋮----
+constructor(
+    public readonly id: string,
+    public readonly s3Url: string,
+    public readonly s3Key: string,
+    public readonly mimeType: string,
+    public readonly description: string,
+    public readonly keywords: string[],
+    public readonly embedding: Embedding,
+    public readonly createdAt: Date,
+    public readonly model: string,
+    public readonly score?: SimilarityScore,
+)
+⋮----
+static create(
+    id: string,
+    s3Url: string,
+    s3Key: string,
+    mimeType: string,
+    description: string,
+    keywords: string[],
+    embedding: number[],
+    model: string,
+    createdAt?: Date,
+): ImageDocument
+⋮----
+withScore(score: number): ImageDocument
+</file>
+
+<file path="src/rag/domain/entities/text-document.entity.ts">
+import { Embedding } from '../value-objects/embedding.vo';
+⋮----
+export class TextDocument
+⋮----
+constructor(
+⋮----
+static create(
+    id: string,
+    text: string,
+    embedding: number[],
+    model: string,
+    createdAt: Date,
+    chunkId?: string,
+    level?: number,
+    startIndex?: number,
+    endIndex?: number,
+    childIds?: string[],
+    parentId?: string,
+    parentText?: string,
+    contextKeywords?: string[],
+    score?: number,
+): TextDocument
+</file>
+
+<file path="src/rag/domain/interfaces/ask-question.interface.ts">
+export interface AskQuestionOptions {
+  question?: string;
+  limit?: number;
+  scoreThreshold?: number;
+
+  useHybridSearch?: boolean;
+  useQueryTransformation?: boolean;
+
+  filters?: Array<{
+    field: string;
+    value: any;
+    operator?: string;
+  }>;
+
+  useReranking?: boolean;
+  rerankStrategy?: 'cross_encoder' | 'llm_based' | 'none' | 'hybrid';
+
+  useContextualCompression?: boolean;
+
+  useConversationMemory?: boolean;
+  conversationHistory?: Array<{
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+  }>;
+
+  topP?: number | undefined;
+
+  topK?: number | undefined;
+
+  sessionId?: string;
+
+  useKnowledgeGraph?: boolean;
+
+  useCitationTracking?: boolean;
+  includeSources?: boolean;
+
+  temperature?: number;
+  maxTokens?: number;
+}
+</file>
+
+<file path="src/rag/domain/interfaces/confidence.interface.ts">
+export type ConfidenceTier = 'HIGH' | 'GRAY_ZONE' | 'LOW';
+⋮----
+export interface ConfidenceScore {
+  score: number;
+  tier: ConfidenceTier;
+  bestChunkIndex: number;
+}
+⋮----
+export interface VerificationResult {
+  grounded: boolean;
+  confidence: ConfidenceScore;
+  llmVerificationUsed: boolean;
+  llmVerdict?: 'YES' | 'NO';
+  message?: string;
+}
+⋮----
+export interface ConfidenceThresholds {
+  high: number;
+  low: number;
+}
+</file>
+
+<file path="src/rag/domain/interfaces/knowledge-link.interface.ts">
+export type LinkType = 'url' | 'image' | 'video';
+⋮----
+export interface IKnowledgeLink {
+  id:         string;
+  url:        string;
+  label:      string;
+  context:    string;
+  sourceFile: string;
+  linkType:   LinkType;
+  keywords:   string[];
+  createdAt:  Date;
+  updatedAt:  Date;
+}
+⋮----
+export interface IKnowledgeLinkRepository {
+  upsertMany(links: Omit<IKnowledgeLink, 'id' | 'createdAt' | 'updatedAt'>[]): Promise<number>;
+  findByKeywords(keywords: string[]): Promise<IKnowledgeLink[]>;
+  findAll(): Promise<IKnowledgeLink[]>;
+  deleteBySourceFile(sourceFile: string): Promise<void>;
+}
+⋮----
+upsertMany(links: Omit<IKnowledgeLink, 'id' | 'createdAt' | 'updatedAt'>[]): Promise<number>;
+findByKeywords(keywords: string[]): Promise<IKnowledgeLink[]>;
+findAll(): Promise<IKnowledgeLink[]>;
+deleteBySourceFile(sourceFile: string): Promise<void>;
+</file>
+
+<file path="src/rag/domain/interfaces/upload-folder.interface.ts">
+import { Readable } from 'stream';
+⋮----
+export interface IUploadedFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+  destination: string;
+  filename: string;
+  path: string;
+  stream: Readable;
+}
+</file>
+
+<file path="src/rag/domain/ports/cache.port.ts">
+export interface CachePort {
+  get<T>(key: string): Promise<T | null>;
+  set(key: string, value: unknown, ttl?: number): Promise<void>;
+  deleteByPattern?(pattern: string): Promise<void>;
+}
+⋮----
+get<T>(key: string): Promise<T | null>;
+set(key: string, value: unknown, ttl?: number): Promise<void>;
+deleteByPattern?(pattern: string): Promise<void>;
+</file>
+
+<file path="src/rag/domain/ports/chat-llm.port.ts">
+export interface LlmOptions {
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  maxTokens?: number;
+  stop?: string[];
+}
+⋮----
+export interface IChatLlmPort {
+  complete(prompt: string, options?: LlmOptions): Promise<string>;
+  describeImage(imageBuffer: Buffer, mimeType: string): Promise<string>;
+  extractKeywords(text: string): Promise<string[]>;
+}
+⋮----
+complete(prompt: string, options?: LlmOptions): Promise<string>;
+describeImage(imageBuffer: Buffer, mimeType: string): Promise<string>;
+extractKeywords(text: string): Promise<string[]>;
+</file>
+
+<file path="src/rag/domain/ports/confidence.port.ts">
+import { 
+    ConfidenceScore, 
+    ConfidenceThresholds, 
+    VerificationResult } from "../interfaces/confidence.interface";
+⋮----
+export interface IConfidencePort {
+    computeScore(
+      answer: string,
+      retrievedChunks: string[],
+      thresholds?: Partial<ConfidenceThresholds>,
+    ): Promise<ConfidenceScore>;
+  
+    verify(
+      answer: string,
+      retrievedChunks: string[],
+      thresholds?: Partial<ConfidenceThresholds>,
+    ): Promise<VerificationResult>;
+  }
+⋮----
+computeScore(
+      answer: string,
+      retrievedChunks: string[],
+      thresholds?: Partial<ConfidenceThresholds>,
+    ): Promise<ConfidenceScore>;
+⋮----
+verify(
+      answer: string,
+      retrievedChunks: string[],
+      thresholds?: Partial<ConfidenceThresholds>,
+    ): Promise<VerificationResult>;
+</file>
+
+<file path="src/rag/domain/ports/conversation-session.repository.port.ts">
+export interface ConversationTurn {
+  query: string;
+  answer: string;
+  timestamp: Date;
+  embedding?: number[];
+}
+⋮----
+export interface IConversationSessionRepository {
+  addTurn(
+    sessionId: string,
+    query: string,
+    answer: string,
+    embedding?: number[],
+  ): Promise<void>;
+  getHistory(sessionId: string, maxTurns?: number): Promise<ConversationTurn[]>;
+  clearSession(sessionId: string): Promise<void>;
+  deleteOldSessions(beforeDate: Date): Promise<number>;
+  getSessionCount(sessionId: string): Promise<number>;
+}
+⋮----
+addTurn(
+    sessionId: string,
+    query: string,
+    answer: string,
+    embedding?: number[],
+  ): Promise<void>;
+getHistory(sessionId: string, maxTurns?: number): Promise<ConversationTurn[]>;
+clearSession(sessionId: string): Promise<void>;
+deleteOldSessions(beforeDate: Date): Promise<number>;
+getSessionCount(sessionId: string): Promise<number>;
+</file>
+
+<file path="src/rag/domain/ports/embedding.port.ts">
+export interface IEmbeddingPort {
+  embed(text: string): Promise<number[] | null>;
+}
+⋮----
+embed(text: string): Promise<number[] | null>;
+</file>
+
+<file path="src/rag/domain/ports/image-rag.port.ts">
+import { 
+  IDeleteImage, 
+  IImageWithScore, 
+  IImageWithoutScore, 
+  IUploadImage 
+} from "src/rag/application/common/interfaces/image.interfaces";
+import { IUploadedFile } from "../interfaces/upload-folder.interface";
+⋮----
+export interface ImageRagPort {
+  deleteImageById(id: string): Promise<IDeleteImage>;
+  getImagesByKeyword(query: string, limit?: number): Promise<Array<IImageWithScore>>;
+  getAllImages(limit?: number): Promise<Array<IImageWithoutScore>>;
+  uploadImages(files: IUploadedFile[]): Promise<IUploadImage>;
+}
+⋮----
+deleteImageById(id: string): Promise<IDeleteImage>;
+getImagesByKeyword(query: string, limit?: number): Promise<Array<IImageWithScore>>;
+getAllImages(limit?: number): Promise<Array<IImageWithoutScore>>;
+uploadImages(files: IUploadedFile[]): Promise<IUploadImage>;
+</file>
+
+<file path="src/rag/domain/ports/knowledge-graph.port.ts">
+export interface KnowledgeGraphEntity {
+  id: string;
+  name: string;
+  type: string;
+  sourceDocument: string;
+  properties?: Record<string, unknown>;
+}
+⋮----
+export interface KnowledgeGraphRelationship {
+  id: string;
+  fromEntityId: string;
+  toEntityId: string;
+  type: string;
+  properties?: Record<string, unknown>;
+}
+⋮----
+export interface IKnowledgeGraphPort {
+  getGraphStats(): Promise<{
+    totalEntities: number;
+    totalRelationships: number;
+    entityTypes: Record<string, number>;
+  }>;
+  addEntity(entity: KnowledgeGraphEntity): Promise<void>;
+  addRelationship(relationship: KnowledgeGraphRelationship): Promise<void>;
+  queryEntities(query: string): Promise<KnowledgeGraphEntity[]>;
+  getEntityById(id: string): Promise<KnowledgeGraphEntity | null>;
+  getRelatedEntities(entityId: string, depth?: number): Promise<KnowledgeGraphEntity[]>;
+  deleteEntity(id: string): Promise<void>;
+  clearGraph(): Promise<void>;
+}
+⋮----
+getGraphStats(): Promise<
+addEntity(entity: KnowledgeGraphEntity): Promise<void>;
+addRelationship(relationship: KnowledgeGraphRelationship): Promise<void>;
+queryEntities(query: string): Promise<KnowledgeGraphEntity[]>;
+getEntityById(id: string): Promise<KnowledgeGraphEntity | null>;
+getRelatedEntities(entityId: string, depth?: number): Promise<KnowledgeGraphEntity[]>;
+deleteEntity(id: string): Promise<void>;
+clearGraph(): Promise<void>;
+</file>
+
+<file path="src/rag/domain/ports/storage.port.ts">
+export interface IStoragePort {
+  uploadFile(key: string, buffer: Buffer, mimeType: string): Promise<string>;
+  deleteFile(key: string): Promise<void>;
+}
+⋮----
+uploadFile(key: string, buffer: Buffer, mimeType: string): Promise<string>;
+deleteFile(key: string): Promise<void>;
+</file>
+
+<file path="src/rag/domain/ports/textRagPort.ts">
+import { AskQuestionOptions } from 'src/rag/application/commands/ask-question.command';
+import {
+  IDeleteDocument,
+  IDocumentWithEmbedding,
+  IDocumentWithoutEmbedding,
+  IGenerateAnswer,
+  IStreamChunk,
+  IUploadKnowledge,
+} from 'src/rag/application/common/interfaces/rag-documents.interfaces';
+import { IUploadedFile } from '../interfaces/upload-folder.interface';
+import { UploadFolderOptions } from 'src/rag/application/commands/upload-folder.command';
+⋮----
+export interface TextRagPort {
+  uploadKnowledgeFromFile(
+    file: Express.Multer.File,
+    options?: {
+      chunkingStrategy?: 'simple' | 'semantic' | 'parent-child';
+      enableKnowledgeGraph?: boolean;
+    },
+  ): Promise<IUploadKnowledge>;
+
+  retrieve(
+    query: string,
+    limit?: number,
+    options?: Pick<
+      AskQuestionOptions,
+      | 'useHybridSearch'
+      | 'useReranking'
+      | 'rerankStrategy'
+      | 'useQueryTransformation'
+      | 'useContextualCompression'
+      | 'useConversationMemory'
+      | 'sessionId'
+      | 'scoreThreshold'
+      | 'filters'
+    >,
+  ): Promise<Array<IDocumentWithEmbedding> | string>;
+
+  getAllDocuments(): Promise<Array<IDocumentWithoutEmbedding>>;
+
+  generateAnswer(
+    question: string,
+    options?: AskQuestionOptions,
+  ): Promise<IGenerateAnswer | string>;
+
+  /**
+   * Streaming variant of `generateAnswer`.
+   *
+   * Yields `IStreamChunk` events in order:
+   *   `metadata` → (`sources`?) → `token`* → (`citations`?) → `done`
+   *
+   * On failure yields an `error` event and terminates.
+   */
+  streamableGenerateAnswer(
+    question: string,
+    options?: AskQuestionOptions,
+  ): AsyncGenerator<IStreamChunk>;
+
+  deleteById(id: string): Promise<IDeleteDocument>;
+
+  uploadMarkdownFolder(
+    files: IUploadedFile[],
+    options: UploadFolderOptions | undefined,
+  ): Promise<{ totalChunks: number; filesProcessed: number }>;
+}
+⋮----
+uploadKnowledgeFromFile(
+    file: Express.Multer.File,
+    options?: {
+      chunkingStrategy?: 'simple' | 'semantic' | 'parent-child';
+      enableKnowledgeGraph?: boolean;
+    },
+  ): Promise<IUploadKnowledge>;
+⋮----
+retrieve(
+    query: string,
+    limit?: number,
+    options?: Pick<
+      AskQuestionOptions,
+      | 'useHybridSearch'
+      | 'useReranking'
+      | 'rerankStrategy'
+      | 'useQueryTransformation'
+      | 'useContextualCompression'
+      | 'useConversationMemory'
+      | 'sessionId'
+      | 'scoreThreshold'
+      | 'filters'
+    >,
+  ): Promise<Array<IDocumentWithEmbedding> | string>;
+⋮----
+getAllDocuments(): Promise<Array<IDocumentWithoutEmbedding>>;
+⋮----
+generateAnswer(
+    question: string,
+    options?: AskQuestionOptions,
+  ): Promise<IGenerateAnswer | string>;
+⋮----
+/**
+   * Streaming variant of `generateAnswer`.
+   *
+   * Yields `IStreamChunk` events in order:
+   *   `metadata` → (`sources`?) → `token`* → (`citations`?) → `done`
+   *
+   * On failure yields an `error` event and terminates.
+   */
+streamableGenerateAnswer(
+    question: string,
+    options?: AskQuestionOptions,
+  ): AsyncGenerator<IStreamChunk>;
+⋮----
+deleteById(id: string): Promise<IDeleteDocument>;
+⋮----
+uploadMarkdownFolder(
+    files: IUploadedFile[],
+    options: UploadFolderOptions | undefined,
+): Promise<
+</file>
+
+<file path="src/rag/domain/repositories/image-document.repository.ts">
+import { ImageDocument } from '../entities/image-document.entity';
+import { Embedding } from '../value-objects/embedding.vo';
+import { SimilarityScore } from '../value-objects/similarity-score.vo';
+⋮----
+export interface IImageDocumentRepository {
+  save(document: ImageDocument): Promise<void>;
+  saveMany(documents: ImageDocument[]): Promise<void>;
+  findByEmbedding(
+    embedding: Embedding,
+    limit: number,
+    minScore?: SimilarityScore,
+  ): Promise<ImageDocument[]>;
+  findAll(limit?: number): Promise<ImageDocument[]>;
+  deleteById(id: string): Promise<void>;
+  findById(id: string): Promise<ImageDocument | null>;
+}
+⋮----
+save(document: ImageDocument): Promise<void>;
+saveMany(documents: ImageDocument[]): Promise<void>;
+findByEmbedding(
+    embedding: Embedding,
+    limit: number,
+    minScore?: SimilarityScore,
+  ): Promise<ImageDocument[]>;
+findAll(limit?: number): Promise<ImageDocument[]>;
+deleteById(id: string): Promise<void>;
+findById(id: string): Promise<ImageDocument | null>;
+</file>
+
+<file path="src/rag/domain/repositories/text-document.repository.ts">
+import { TextDocument } from '../entities/text-document.entity';
+import { Embedding } from '../value-objects/embedding.vo';
+⋮----
+export interface ITextDocumentRepository {
+  saveMany(documents: TextDocument[]): Promise<void>;
+  findByEmbedding(embedding: Embedding, limit: number, options: any): Promise<TextDocument[]>;
+  findAll(limit?: number): Promise<TextDocument[]>;
+  deleteById(id: string): Promise<void>;
+}
+⋮----
+saveMany(documents: TextDocument[]): Promise<void>;
+findByEmbedding(embedding: Embedding, limit: number, options: any): Promise<TextDocument[]>;
+findAll(limit?: number): Promise<TextDocument[]>;
+deleteById(id: string): Promise<void>;
+</file>
+
+<file path="src/rag/domain/value-objects/collection-config.vo.ts">
+export type DistanceMetric = 'Cosine' | 'Euclid' | 'Dot';
+⋮----
+export interface HnswConfig {
+  m: number;
+  efConstruct: number;
+  efSearch?: number;
+}
+⋮----
+export class CollectionConfig
+⋮----
+constructor(
+    public readonly name: string,
+    public readonly vectorSize: number,
+    public readonly distance: DistanceMetric = 'Cosine',
+    public readonly hnswConfig?: HnswConfig,
+)
+</file>
+
+<file path="src/rag/domain/value-objects/embedding.vo.ts">
+export class Embedding
+⋮----
+constructor(values: number[])
+⋮----
+get values(): number[]
+⋮----
+get dimension(): number
+⋮----
+equals(other: Embedding): boolean
+</file>
+
+<file path="src/rag/domain/value-objects/similarity-score.vo.ts">
+export class SimilarityScore
+⋮----
+constructor(value: number)
+⋮----
+get value(): number
+⋮----
+equals(other: SimilarityScore): boolean
+⋮----
+isGreaterThan(threshold: number): boolean
+</file>
+
+<file path="src/rag/infrastructure/confidence/confidence.module.ts">
+import { ConfidenceService } from "src/rag/application/services/confidence.service";
+⋮----
+export const confidenceConfig = () => (
+</file>
+
+<file path="src/rag/infrastructure/mappers/image-document.qdrant.mapper.ts">
+import { Schemas } from '@qdrant/js-client-rest';
+import { ImageDocument } from 'src/rag/domain/entities/image-document.entity';
+import { Embedding } from 'src/rag/domain/value-objects/embedding.vo';
+import { SimilarityScore } from 'src/rag/domain/value-objects/similarity-score.vo';
+⋮----
+export class ImageDocumentQdrantMapper
+⋮----
+static toPoint(doc: ImageDocument)
+⋮----
+static fromPoint(
+    point: Schemas['ScoredPoint'] | Schemas['Record'],
+    score?: number,
+): ImageDocument
+</file>
+
+<file path="src/rag/infrastructure/mappers/text-document.qdrant.mapper.ts">
+import { Schemas } from '@qdrant/js-client-rest';
+import { TextDocument } from 'src/rag/domain/entities/text-document.entity';
+import { Embedding } from 'src/rag/domain/value-objects/embedding.vo';
+⋮----
+export class TextDocumentQdrantMapper
+⋮----
+static toPoint(doc: TextDocument)
+⋮----
+static fromPoint(
+    point: Schemas['ScoredPoint'] | Schemas['Record'],
+    model?: string,
+): TextDocument
+</file>
+
+<file path="src/rag/infrastructure/ollama/ollama-chat.adapter.ts">
+import { Injectable } from '@nestjs/common';
+import { IChatLlmPort, LlmOptions } from 'src/rag/domain/ports/chat-llm.port';
+import { OllamaService } from './ollama.service';
+⋮----
+export class OllamaChatAdapter implements IChatLlmPort
+⋮----
+constructor(private readonly ollama: OllamaService)
+⋮----
+async complete(prompt: string, options?: LlmOptions): Promise<string>
+⋮----
+async describeImage(imageBuffer: Buffer, mimeType: string): Promise<string>
+⋮----
+async extractKeywords(text: string): Promise<string[]>
+</file>
+
+<file path="src/rag/infrastructure/ollama/ollama-embedding.adapter.ts">
+import { Injectable } from '@nestjs/common';
+import { IEmbeddingPort } from 'src/rag/domain/ports/embedding.port';
+import { OllamaService } from './ollama.service';
+⋮----
+export class OllamaEmbeddingAdapter implements IEmbeddingPort
+⋮----
+constructor(private readonly ollama: OllamaService)
+⋮----
+async embed(text: string): Promise<number[] | null>
+</file>
+
+<file path="src/rag/infrastructure/prisma/prisma.module.ts">
+import { Global, Module } from '@nestjs/common';
+import { PrismaService } from './prisma.service';
+import { ConversationSessionPrismaRepository } from './repositories/conversation-session-prisma.repository';
+⋮----
+export class PrismaModule
+</file>
+
+<file path="src/rag/infrastructure/prisma/prisma.service.ts">
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
+⋮----
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy
+⋮----
+constructor()
+⋮----
+async onModuleInit()
+⋮----
+async onModuleDestroy()
+⋮----
+async enableShutdownHooks()
+⋮----
+async cleanDatabase()
+</file>
+
+<file path="src/rag/infrastructure/qdrant/repositories/qdrant-image-document.repository.ts">
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { IImageDocumentRepository } from '../../../domain/repositories/image-document.repository';
+import { ImageDocument } from '../../../domain/entities/image-document.entity';
+import { Embedding } from '../../../domain/value-objects/embedding.vo';
+import { CollectionConfig } from '../../../domain/value-objects/collection-config.vo';
+import { RagQdrantService } from '../rag-qdrant.service';
+import { RAG_CONFIG, TRagConfig } from '../../config/rag-config';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { ImageDocumentQdrantMapper } from '../../mappers/image-document.qdrant.mapper';
+⋮----
+export class QdrantImageDocumentRepository
+implements IImageDocumentRepository, OnModuleInit
+⋮----
+constructor(
+    private readonly qdrant: RagQdrantService,
+    private readonly configService: ConfigService,
+    @Inject('LoggerPort') private readonly logger: LoggerPort,
+)
+⋮----
+async onModuleInit(): Promise<void>
+⋮----
+async save(document: ImageDocument): Promise<void>
+⋮----
+async saveMany(documents: ImageDocument[]): Promise<void>
+⋮----
+async findByEmbedding(
+    embedding: Embedding,
+    limit: number,
+): Promise<Array<ImageDocument>>
+⋮----
+async findAll(limit = 1000): Promise<Array<ImageDocument>>
+⋮----
+async deleteById(id: string): Promise<void>
+⋮----
+async findById(id: string): Promise<ImageDocument | null>
+</file>
+
+<file path="src/rag/infrastructure/qdrant/qdrant.module.ts">
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { RagQdrantService } from './rag-qdrant.service';
+import { QdrantImageDocumentRepository } from './repositories/qdrant-image-document.repository';
+import { QdrantTextDocumentRepository } from './repositories/qdrant-text-document.repository';
+import { OllamaModule } from '../ollama/ollama.module';
+import { S3Module } from '../s3/s3.module';
+import { ConsoleLoggerAdapter } from 'src/rag/shared/application/ports/console.logger.adapter';
+⋮----
+export class QdrantModule
+</file>
+
+<file path="src/rag/infrastructure/redis/cache.module.ts">
+import { Module } from '@nestjs/common';
+import { IORedisCacheAdapter } from './ioredis.adapter';
+import { UpstashCacheAdapter } from './upstash.adapter';
+⋮----
+export class CacheModule
+</file>
+
+<file path="src/rag/infrastructure/redis/ioredis.adapter.ts">
+import { Inject, Injectable } from '@nestjs/common';
+import IORedis from 'ioredis';
+import { CachePort } from 'src/rag/domain/ports/cache.port';
+⋮----
+export class IORedisCacheAdapter implements CachePort
+⋮----
+constructor(@Inject('REDIS_CLIENT') private readonly client: IORedis)
+⋮----
+async get<T>(key: string): Promise<T | null>
+⋮----
+async set(key: string, value: unknown, ttl?: number): Promise<void>
+⋮----
+async deleteByPattern(pattern: string): Promise<void>
+</file>
+
+<file path="src/rag/infrastructure/redis/upstash.adapter.ts">
+import { Inject, Injectable } from '@nestjs/common';
+import { Redis as RedisUpstash } from '@upstash/redis';
+import { CachePort } from 'src/rag/domain/ports/cache.port';
+⋮----
+export class UpstashCacheAdapter implements CachePort
+⋮----
+constructor(@Inject('REDIS_CLIENT') private readonly client: RedisUpstash)
+⋮----
+async get<T>(key: string): Promise<T | null>
+⋮----
+async set(key: string, value: unknown, ttl?: number): Promise<void>
+⋮----
+async deleteByPattern(pattern: string): Promise<void>
+</file>
+
+<file path="src/rag/infrastructure/s3/s3.module.ts">
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { S3StorageService } from './s3.storage.service';
+import { ConsoleLoggerAdapter } from 'src/rag/shared/application/ports/console.logger.adapter';
+⋮----
+export class S3Module
+</file>
+
+<file path="src/rag/presentation/api-response/api-response.ts">
+import { Meta } from './meta';
+⋮----
+export class ApiResponse<T>
+⋮----
+private constructor(success: boolean, data: T, meta: Meta)
+⋮----
+static success<T>(data: T, meta?: Meta): ApiResponse<T>
+⋮----
+static error<T>(message: string, data?: T): ApiResponse<T | undefined>
+</file>
+
+<file path="src/rag/presentation/api-response/meta.ts">
+export class Meta
+⋮----
+constructor(partial: Partial<Meta>)
+</file>
+
+<file path="src/rag/presentation/controllers/chat.controller.ts">
+import {
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Query,
+} from '@nestjs/common';
+⋮----
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { ApiResponse } from '../api-response/api-response';
+import { Meta } from '../api-response/meta';
+⋮----
+export interface ChatTurn {
+  id: string;
+  query: string;
+  answer: string;
+  timestamp: Date;
+}
+⋮----
+export interface ChatSummary {
+  sessionId: string;
+  firstMessage: string;
+  lastActivity: Date;
+  turnCount: number;
+}
+⋮----
+export interface ChatDetail {
+  sessionId: string;
+  turns: ChatTurn[];
+}
+⋮----
+export class ChatController
+⋮----
+constructor(private readonly prisma: PrismaService)
+⋮----
+async listChats(): Promise<ApiResponse<ChatSummary[]>>
+⋮----
+async getChat(
+    @Param('sessionId') sessionId: string,
+    @Query('limit') limit?: string,
+): Promise<ApiResponse<ChatDetail>>
+⋮----
+async deleteChat(@Param('sessionId') sessionId: string): Promise<ApiResponse<null>>
+⋮----
+async clearAllChats(): Promise<ApiResponse<null>>
+</file>
+
+<file path="src/rag/presentation/controllers/image.controller.ts">
+import {
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Query,
+  UploadedFiles,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { CommandBusPort } from '../../shared/application/ports/command-bus.port';
+import { ProcessImagesCommand } from '../../application/commands/process-images.command';
+import { DeleteImageCommand } from '../../application/commands/delete-image.command';
+import {
+  GetAllImagesQuery,
+  GetImagesByKeywordQuery,
+} from '../../application/queries/rag.queries';
+import { ApiResponse } from '../api-response/api-response';
+import { Meta } from '../api-response/meta';
+import { IUploadImage, IImageWithScore, IImageWithoutScore, IDeleteImage } from 'src/rag/application/common/interfaces/image.interfaces';
+⋮----
+export class RagImagesController
+⋮----
+constructor(
+⋮----
+async uploadImages(
+    @UploadedFiles() files: Express.Multer.File[],
+): Promise<ApiResponse<IUploadImage>>
+⋮----
+async searchImages(
+    @Query('q') query: string,
+    @Query('limit') limit?: string,
+): Promise<ApiResponse<IImageWithScore[]>>
+⋮----
+async getAllImages(
+    @Query('limit') limit?: string,
+): Promise<ApiResponse<IImageWithoutScore[]>>
+⋮----
+async deleteImage(@Param('id') id: string): Promise<ApiResponse<IDeleteImage>>
+</file>
+
+<file path="src/rag/presentation/dto/ask.dto.ts">
+import { 
+  ApiProperty, 
+  ApiPropertyOptional 
+} from '@nestjs/swagger';
+import {
+  IsNotEmpty,
+  IsString,
+  MaxLength,
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+  IsArray,
+  ValidateNested,
+  IsEnum,
+  IsBoolean,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+⋮----
+export enum RerankStrategy {
+  NONE = 'none',
+  CROSS_ENCODER = 'cross_encoder',
+  LLM_BASED = 'llm_based',
+}
+⋮----
+export class ConversationMessage
+⋮----
+export class MetadataFilter
+⋮----
+export class AdvancedRagOptionsDto
+⋮----
+export class AskDto
+</file>
+
+<file path="src/rag/presentation/dto/retrieve.dto.ts">
+import { IsOptional, IsString, IsNumber, IsBoolean, IsArray, ValidateNested, IsEnum, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
+import { RerankStrategy } from './ask.dto';
+⋮----
+export class RetrieveOptionsDto
+⋮----
+export class RetrieveDto
+</file>
+
+<file path="src/rag/presentation/dto/upload-folder.dto.ts">
+import { IsOptional, IsEnum, IsString } from 'class-validator';
+⋮----
+export enum ChunkingStrategy {
+  SIMPLE = 'simple',
+  SEMANTIC = 'semantic',
+  PARENT_CHILD = 'parent-child',
+}
+⋮----
+export class UploadFolderDto
+</file>
+
+<file path="src/rag/shared/application/ports/command-bus.port.ts">
+export interface ICommandHandler<TCommand, TResult = void> {
+  execute(command: TCommand): Promise<TResult>;
+}
+⋮----
+execute(command: TCommand): Promise<TResult>;
+⋮----
+export interface CommandBusPort {
+  execute<TResult = void>(command: object): Promise<TResult>;
+  register<TCommand extends object, TResult = void>(
+    commandClass: new (...args: any[]) => TCommand,
+    handler: ICommandHandler<TCommand, TResult>,
+  ): void;
+}
+⋮----
+execute<TResult = void>(command: object): Promise<TResult>;
+register<TCommand extends object, TResult = void>(
+    commandClass: new (...args: any[]) => TCommand,
+    handler: ICommandHandler<TCommand, TResult>,
+  ): void;
+</file>
+
+<file path="src/rag/shared/application/ports/console.logger.adapter.ts">
+import { Injectable } from '@nestjs/common';
+import { LoggerPort } from '../../application/ports/logger.port';
+⋮----
+export class ConsoleLoggerAdapter implements LoggerPort
+⋮----
+log(message: string, meta?: Record<string, unknown>)
+⋮----
+warn(message: string, meta?: Record<string, unknown>)
+⋮----
+error(message: string, meta?: Record<string, unknown>)
+</file>
+
+<file path="src/rag/shared/application/ports/logger.port.ts">
+export interface LoggerPort {
+  log(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
+  error(message: string, meta?: Record<string, unknown>): void;
+}
+⋮----
+log(message: string, meta?: Record<string, unknown>): void;
+warn(message: string, meta?: Record<string, unknown>): void;
+error(message: string, meta?: Record<string, unknown>): void;
+</file>
+
+<file path="src/rag/shared/infrastructure/command-bus.adapter.ts">
+import { Injectable } from '@nestjs/common';
+import {
+  CommandBusPort,
+  ICommandHandler,
+} from '../application/ports/command-bus.port';
+⋮----
+export class CommandBusAdapter implements CommandBusPort
+⋮----
+register<TCommand extends object, TResult = void>(
+    commandClass: new (...args: any[]) => TCommand,
+    handler: ICommandHandler<TCommand, TResult>,
+): void
+⋮----
+async execute<TResult = void>(command: object): Promise<TResult>
+</file>
+
+<file path="src/rag/shared/infrastructure/command-bus.module.ts">
+import { Module } from '@nestjs/common';
+import { CommandBusAdapter } from './command-bus.adapter';
+⋮----
+export class RagCommandBusModule
+</file>
+
+<file path="src/rag/shared/nest/filters/all-exeption.filter.ts">
+import {
+    ExceptionFilter,
+    Catch,
+    ArgumentsHost,
+    HttpException,
+    HttpStatus,
+} from '@nestjs/common';
+import { Request, Response } from 'express';
+⋮----
+export class AllExceptionsFilter implements ExceptionFilter
+⋮----
+catch(exception: unknown, host: ArgumentsHost)
+</file>
+
+<file path=".dockerignore">
+node_modules
+dist
+.git
+.env
+</file>
+
+<file path="Dockerfile">
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm i
+
+COPY . .
+
+RUN npm run build
+
+EXPOSE 3000
+
+CMD ["node", "dist/main.js"]
+</file>
+
+<file path="nest-cli.json">
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "deleteOutDir": true
+  }
+}
+</file>
+
+<file path="README.md">
+# RAG
+</file>
+
+<file path="prisma/schema.prisma">
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")  // ← This line was missing
+}
+
+model ConversationSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  sessionId String   @map("session_id") @db.VarChar(255)
+  query     String   @db.Text
+  answer    String   @db.Text
+  embedding Float[]  @db.Real
+  timestamp DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([sessionId, timestamp])
+  @@index([sessionId])
+  @@index([timestamp])
+  @@map("conversation_sessions")
+}
+
+model KnowledgeLink {
+  id          String   @id @default(uuid()) @db.Uuid
+  url         String   @db.Text
+  label       String   @db.VarChar(500)
+  context     String   @db.Text    
+  sourceFile  String   @db.VarChar(500)    
+  linkType    String   @db.VarChar(50)    
+  keywords    String[] @db.Text      
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([label])
+  @@index([keywords])
+  @@map("knowledge_links")
+}
+</file>
+
+<file path="src/rag/application/utils/contextual-compression.util.ts">
+import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+⋮----
+export interface CompressedContext {
+  original: string;
+  compressed: string;
+  relevantSentences: string[];
+  compressionRatio: number;
+}
+⋮----
+export class ContextualCompressor
+⋮----
+constructor(private readonly ollamaService: OllamaService)
+⋮----
+async compressContext(
+    query: string,
+    documents: Array<{ id: string; text: string }>,
+    options: {
+      maxTokens?: number;
+      method?: 'extractive' | 'abstractive' | 'hybrid';
+    } = {},
+): Promise<CompressedContext[]>
+⋮----
+private async compressSingleDocument(
+    query: string,
+    text: string,
+    maxTokens: number,
+    method: 'extractive' | 'abstractive' | 'hybrid',
+): Promise<CompressedContext>
+⋮----
+private async extractiveCompression(
+    query: string,
+    text: string,
+    maxTokens: number,
+): Promise<CompressedContext>
+⋮----
+private async abstractiveCompression(
+    query: string,
+    text: string,
+    maxTokens: number,
+): Promise<CompressedContext>
+⋮----
+private async hybridCompression(
+    query: string,
+    text: string,
+    maxTokens: number,
+): Promise<CompressedContext>
+⋮----
+private cosineSimilarity(a: number[], b: number[]): number
+</file>
+
+<file path="src/rag/application/utils/link-extractor.util.ts">
+import { IKnowledgeLink, LinkType } from 'src/rag/domain/interfaces/knowledge-link.interface';
+⋮----
+export interface ExtractedLink {
+  url:      string;
+  label:    string;
+  context:  string;
+  linkType: LinkType;
+  keywords: string[];
+}
+⋮----
+export function isValidUrl(url: string): boolean
+⋮----
+function detectLinkType(url: string): LinkType
+⋮----
+function extractContext(text: string, matchIndex: number, maxChars = 300): string
+⋮----
+// Walk forward to the nearest blank line (paragraph end)
+⋮----
+// Fallback: symmetric character window
+⋮----
+// ─── Keyword extraction ───────────────────────────────────────────────────────
+// Sources: label tokens + URL hostname/path tokens + high-frequency context tokens.
+⋮----
+function tokenize(text: string): string[]
+⋮----
+function buildKeywords(label: string, url: string, context: string): string[]
+⋮----
+const addWithVariants = (w: string) =>
+⋮----
+// 1. Label tokens — highest signal (user-authored text)
+⋮----
+// 2. URL hostname + meaningful pathname segments
+⋮----
+// Relative URL — extract tokens from the raw string
+⋮----
+// 3. High-frequency context tokens not yet covered (up to 15 extra)
+⋮----
+// ─── Main extractor ───────────────────────────────────────────────────────────
+⋮----
+export function extractLinksFromMarkdown(
+  content: string,
+  sourceFile: string,
+): Omit<IKnowledgeLink, 'id' | 'createdAt' | 'updatedAt'>[]
+⋮----
+// Deduplicate by URL only — if the same URL appears with multiple labels,
+// keep the entry whose label is the most descriptive (longest non-URL string).
+⋮----
+const add = (rawUrl: string, rawLabel: string, matchIndex: number) =>
+⋮----
+// NOTE: relative/internal URLs are stored as-is.
+// isValidUrl() is applied only when serving results to users.
+⋮----
+// ─── Query classifier ─────────────────────────────────────────────────────────
+⋮----
+export function isLinkQuery(query: string): boolean
+</file>
+
+<file path="src/rag/application/utils/reranker.util.ts">
+import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+⋮----
+export interface RerankedResult<T> {
+  id?: string;
+  text?: string;
+  score?: number;
+  item: T;
+  originalScore: number;
+  rerankScore: number;
+  finalScore: number;
+}
+⋮----
+export interface RerankableItem {
+  text: string;
+  score?: number;
+  vector?: number[];
+}
+⋮----
+export class Reranker
+⋮----
+constructor(private readonly ollamaService: OllamaService)
+⋮----
+async rerank<T extends RerankableItem>(
+    query: string,
+    results: T[],
+    options: {
+      topK?:   number;
+      method?: 'llm' | 'embedding' | 'hybrid' | 'listwise';
+    } = {},
+): Promise<RerankedResult<T>[]>
+⋮----
+private async listwiseLlmRerank<T extends RerankableItem>(
+    query: string,
+    results: T[],
+    topK: number,
+): Promise<RerankedResult<T>[]>
+⋮----
+const truncate = (text: string, maxLen = 400): string =>
+⋮----
+private async llmRerank<T extends RerankableItem>(
+    query: string,
+    results: T[],
+): Promise<RerankedResult<T>[]>
+⋮----
+private async embeddingRerank<T extends RerankableItem>(
+    query: string,
+    results: T[],
+): Promise<RerankedResult<T>[]>
+⋮----
+private async hybridRerank<T extends RerankableItem>(
+    query: string,
+    results: T[],
+): Promise<RerankedResult<T>[]>
+⋮----
+private cosineSimilarity(a: number[], b: number[]): number
+</file>
+
+<file path="src/rag/application/utils/transliteration.util.ts">
+export function cyrillicToLatin(text: string): string
+⋮----
+export function latinToCyrillicBestEffort(text: string): string
+⋮----
+export function generateNameVariants(token: string): string[]
+⋮----
+/**
+ * Non-person context words: if any of these appear in the query, the
+ * capitalised token is likely a company / product / tool name — NOT a human.
+ */
+⋮----
+'onix', // always treat "Onix" as a non-person subject
+⋮----
+export function isEntityQuery(query: string): boolean
+⋮----
+// If the query contains non-person context words → not an entity (human) query
+⋮----
+export function extractQueryNameVariants(query: string): string[]
+⋮----
+export function enrichKeywordsWithVariants(keywords: string[]): string[]
+</file>
+
+<file path="src/rag/domain/repositories/knowledge-link-prisma.repository.ts">
+import { Injectable } from '@nestjs/common';
+import {
+  IKnowledgeLink,
+  IKnowledgeLinkRepository,
+  LinkType,
+} from 'src/rag/domain/interfaces/knowledge-link.interface';
+import { PrismaService } from 'src/rag/infrastructure/prisma/prisma.service';
+⋮----
+export class KnowledgeLinkPrismaRepository implements IKnowledgeLinkRepository
+⋮----
+constructor(private readonly prisma: PrismaService)
+⋮----
+async upsertMany(
+    links: Omit<IKnowledgeLink, 'id' | 'createdAt' | 'updatedAt'>[],
+): Promise<number>
+⋮----
+// Deduplicate by URL at the application level — fetch all currently stored
+// URLs and skip any that already exist (works regardless of DB schema constraints).
+⋮----
+// Race condition or unexpected constraint — skip silently
+⋮----
+/**
+   * Searches by:
+   *  - keywords array overlap  (GIN index)
+   *  - label     ILIKE any keyword
+   *  - context   ILIKE any keyword
+   *  - sourceFile ILIKE any keyword
+   *
+   * Results are ranked by a relevance score and deduplicated by URL.
+   */
+async findByKeywords(keywords: string[]): Promise<IKnowledgeLink[]>
+⋮----
+async findAll(): Promise<IKnowledgeLink[]>
+⋮----
+async deleteBySourceFile(sourceFile: string): Promise<void>
+⋮----
+private toInterface(row: any): IKnowledgeLink
+</file>
+
+<file path="src/rag/infrastructure/neo4j/neo4j.module.ts">
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { Neo4jKnowledgeGraphService } from './neo4j-knowledge-graph.service';
+import { ConsoleLoggerAdapter } from 'src/rag/shared/application/ports/console.logger.adapter';
+⋮----
+export class Neo4jModule
+</file>
+
+<file path="src/rag/infrastructure/ollama/ollama.module.ts">
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { OllamaService } from './ollama.service';
+import { ConsoleLoggerAdapter } from 'src/rag/shared/application/ports/console.logger.adapter';
+import { CacheModule } from '../redis/cache.module';
+⋮----
+export class OllamaModule
+</file>
+
+<file path="src/rag/infrastructure/qdrant/mappers/qdrant-collection-config.mapper.ts">
+import { Schemas } from '@qdrant/js-client-rest';
+import { CollectionConfig } from 'src/rag/domain/value-objects/collection-config.vo';
+⋮----
+type QdrantDistance = Schemas['Distance'];
+⋮----
+export class QdrantCollectionConfigMapper
+⋮----
+static toQdrantConfig(config: CollectionConfig): Schemas['CreateCollection']
+⋮----
+private static mapDistance(distance: string): QdrantDistance
+</file>
+
+<file path="src/rag/infrastructure/qdrant/repositories/qdrant-text-document.repository.ts">
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { RagQdrantService, SearchMode } from '../rag-qdrant.service';
+import { RAG_CONFIG, TRagConfig } from '../../config/rag-config';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { TextDocumentQdrantMapper } from '../../mappers/text-document.qdrant.mapper';
+import { TextDocument } from 'src/rag/domain/entities/text-document.entity';
+import { ITextDocumentRepository } from 'src/rag/domain/repositories/text-document.repository';
+import { CollectionConfig } from 'src/rag/domain/value-objects/collection-config.vo';
+import { Embedding } from 'src/rag/domain/value-objects/embedding.vo';
+⋮----
+export class QdrantTextDocumentRepository
+implements ITextDocumentRepository, OnModuleInit
+⋮----
+constructor(
+    private readonly qdrant: RagQdrantService,
+    private readonly configService: ConfigService,
+    @Inject('LoggerPort') private readonly logger: LoggerPort,
+)
+⋮----
+async onModuleInit(): Promise<void>
+⋮----
+async saveMany(documents: TextDocument[]): Promise<void>
+⋮----
+async findByEmbedding(
+    embedding: Embedding,
+    limit: number,
+    options?: {
+      scoreThreshold?: number;
+      onlyChildren?: boolean;
+      searchMode?: SearchMode;
+      filter?: object;
+    },
+): Promise<TextDocument[]>
+⋮----
+async findAll(limit = 1_000): Promise<TextDocument[]>
+⋮----
+async findAllPaginated(
+    limit = 100,
+    offset?: string,
+): Promise<
+⋮----
+async deleteById(id: string): Promise<void>
+⋮----
+private buildFilter(onlyChildren?: boolean, extra?: object): object | undefined
+</file>
+
+<file path="src/rag/infrastructure/redis/redis.module.ts">
+import { Module, Global } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Redis as RedisUpstash } from '@upstash/redis';
+import IORedis from 'ioredis';
+⋮----
+export class RedisModule
+</file>
+
+<file path="src/rag/presentation/controllers/link.controller.ts">
+import {
+    Controller,
+    Get,
+    Delete,
+    Query,
+    Param,
+    HttpCode,
+    HttpStatus,
+    BadRequestException,
+    NotFoundException,
+    Inject,
+    Post,
+    UploadedFiles,
+    UseInterceptors,
+  } from '@nestjs/common';
+import { LinkService, LinkSearchResult } from '../../application/services/link.service';
+import { IKnowledgeLink, IKnowledgeLinkRepository } from '../../domain/interfaces/knowledge-link.interface';
+import { LoggerPort } from '../../shared/application/ports/logger.port';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { ExtractLinksHandler } from 'src/rag/application/handlers/extract-links.handler';
+import { IndexLinksCommand } from 'src/rag/application/commands/extract-links.command';
+⋮----
+export interface GetAllLinksResponse {
+    total: number;
+    links: IKnowledgeLink[];
+  }
+⋮----
+export interface SearchLinksResponse {
+    query:  string;
+    total:  number;
+    links:  IKnowledgeLink[];
+    block?: string;
+  }
+⋮----
+export interface DeleteLinksResponse {
+    sourceFile: string;
+    deleted:    boolean;
+  }
+⋮----
+export interface IndexLinksResponse {
+    filesProcessed: number;
+    linksIndexed:   number;
+  }
+⋮----
+const mdFilesInterceptor = ()
+⋮----
+export class LinksController
+⋮----
+constructor(
+⋮----
+async getAllLinks(
+      @Query('sourceFile') sourceFile?: string,
+): Promise<GetAllLinksResponse>
+⋮----
+async searchLinks(
+      @Query('q') q?: string,
+): Promise<SearchLinksResponse>
+⋮----
+async queryLinks(
+      @Query('q') q?: string,
+): Promise<SearchLinksResponse>
+⋮----
+async deleteBySourceFile(
+      @Param('sourceFile') sourceFile: string,
+): Promise<DeleteLinksResponse>
+⋮----
+async indexLinks(
+      @UploadedFiles() files: Express.Multer.File[],
+): Promise<IndexLinksResponse>
+⋮----
+// Normalise paths coming from the browser's webkitdirectory picker.
+// The frontend sends webkitRelativePath as the filename, e.g. "vault/api/guide.md".
+// We sanitise separators and strip any accidental leading slash.
+</file>
+
+<file path="src/rag/presentation/controllers/rag-documents.controller.ts">
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Res,
+  UploadedFile,
+  UploadedFiles,
+  UseInterceptors,
+} from '@nestjs/common';
+import { Response } from 'express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+⋮----
+import { CommandBusPort } from '../../shared/application/ports/command-bus.port';
+import { AskQuestionCommand } from '../../application/commands/ask-question.command';
+import { AskQuestionHandler } from '../../application/handlers/ask-question.handler';
+import { UploadKnowledgeCommand } from '../../application/commands/upload-knowledge.command';
+import { DeleteDocumentCommand } from '../../application/commands/delete-document.command';
+⋮----
+import {
+  GetAllDocumentsQuery,
+  RetrieveDocumentsQuery,
+} from '../../application/queries/rag.queries';
+⋮----
+import { ApiResponse } from '../api-response/api-response';
+import { Meta } from '../api-response/meta';
+import { AskDto } from '../dto/ask.dto';
+import { UploadFolderCommand } from 'src/rag/application/commands/upload-folder.command';
+import { IGenerateAnswer, IUploadKnowledge, IDocumentWithoutEmbedding, IDocumentWithEmbedding } from 'src/rag/application/common/interfaces/rag-documents.interfaces';
+import { IUploadedFile } from 'src/rag/domain/interfaces/upload-folder.interface';
+import { RetrieveDto } from '../dto/retrieve.dto';
+import { UploadFolderDto } from '../dto/upload-folder.dto';
+⋮----
+export class RagDocumentsController
+⋮----
+constructor(
+⋮----
+async askQuestion(
+    @Body() dto: AskDto,
+): Promise<ApiResponse<IGenerateAnswer>>
+⋮----
+async askQuestionStream(
+    @Body() dto: AskDto,
+    @Res() res: Response,
+): Promise<void>
+⋮----
+const writeChunk = (chunk: object, eventName: string): void =>
+⋮----
+async uploadFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('chunkingStrategy') chunkingStrategy?: 'simple' | 'semantic' | 'parent-child',
+    @Body('enableKnowledgeGraph') enableKnowledgeGraph?: string,
+): Promise<ApiResponse<IUploadKnowledge>>
+⋮----
+async getAllDocuments(): Promise<ApiResponse<Array<IDocumentWithoutEmbedding>>>
+⋮----
+async deleteDocument(@Param('id') id: string): Promise<ApiResponse<null>>
+⋮----
+async uploadFolder(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body() dto: UploadFolderDto,
+): Promise<ApiResponse<unknown>>
+⋮----
+async retrieve(@Body() dto: RetrieveDto): Promise<ApiResponse<IDocumentWithEmbedding[]>>
+</file>
+
+<file path="src/main.ts">
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ValidationPipe } from '@nestjs/common';
+import { AllExceptionsFilter } from './rag/shared/nest/filters/all-exeption.filter';
+import helmet from 'helmet';
+⋮----
+async function bootstrap()
+</file>
+
+<file path="tsconfig.build.json">
+{
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "prisma"]
+}
+</file>
+
+<file path="src/rag/application/common/interfaces/rag-documents.interfaces.ts">
+export interface IDocumentWithEmbedding {
+  id: string;
+  text: string;
+  embedding: number[];
+  createdAt: string;
+  model: string;
+  score?: number;
+  metadata?: Record<string, any>;
+  parentId?: string;
+  parentText?: string;
+}
+⋮----
+export interface IDocumentWithoutEmbedding {
+  id: string;
+  text: string;
+  createdAt: string;
+  model: string;
+  metadata?: Record<string, any>;
+}
+⋮----
+export interface ICitation {
+  id: string;
+  documentId: string;
+  text: string;
+}
+⋮----
+export interface IGenerateAnswer {
+  answer: string;
+  formattedAnswer?: string;
+  citations?: ICitation[];
+  relevantChunks?: number;
+  confidence?: number;
+  queryType?: 'entity' | 'factual' | 'wide';
+  queryConfidence?: number;
+  generationParams?: {
+    temperature: number;
+    topP?: number;
+    topK?: number;
+    maxTokens: number;
+    repeatPenalty?: number;
+    seed?: number;
+  };
+  knowledgeGraphContext?: string;
+  conversationContext?: boolean;
+  sources?: Array<{
+    id: string;
+    text: string;
+    score?: number;
+    metadata?: Record<string, any>;
+  }>;
+  links?: Array<{ url: string; label: string; linkType: string }>;
+}
+⋮----
+export interface IUploadKnowledge {
+  chunks: number;
+  metadata?: Record<string, any>;
+}
+⋮----
+export interface IDeleteDocument {
+  deletedDocumentId: string;
+}
+⋮----
+export type IStreamChunk =
+  | {
+      event: 'metadata';
+      metadata: Partial<Omit<IGenerateAnswer, 'answer' | 'formattedAnswer' | 'sources' | 'links'>>;
+    }
+  | {
+      event: 'sources';
+      sources: NonNullable<IGenerateAnswer['sources']>;
+    }
+  | {
+      event: 'links';
+      links: NonNullable<IGenerateAnswer['links']>;
+      block: string;
+    }
+  | {
+      event: 'token';
+      token: string;
+    }
+  | {
+      event: 'citations';
+      citations: ICitation[];
+    }
+  | {
+      event: 'correction';
+      correctedAnswer: string;
+      reason: 'hallucination';
+    }
+  | {
+      event: 'done';
+      metadata: Partial<Omit<IGenerateAnswer, 'answer' | 'formattedAnswer' | 'sources'>>;
+    }
+  | {
+      event: 'error';
+      error: string;
+    };
+</file>
+
+<file path="src/rag/infrastructure/prisma/repositories/conversation-session-prisma.repository.ts">
+import { Injectable, Inject } from '@nestjs/common';
+import Redis from 'ioredis';
+import { PrismaService } from '../prisma.service';
+import {
+  IConversationSessionRepository,
+  ConversationTurn,
+} from 'src/rag/domain/ports/conversation-session.repository.port';
+import { v4 as uuidv4 } from 'uuid';
+⋮----
+export class ConversationSessionPrismaRepository
+implements IConversationSessionRepository
+⋮----
+constructor(
+⋮----
+async addTurn(
+    sessionId: string,
+    query: string,
+    answer: string,
+    embedding?: number[],
+): Promise<void>
+⋮----
+async getHistory(sessionId: string, maxTurns = 5): Promise<ConversationTurn[]>
+⋮----
+async clearSession(sessionId: string): Promise<void>
+⋮----
+async deleteOldSessions(beforeDate: Date): Promise<number>
+⋮----
+async getSessionCount(sessionId: string): Promise<number>
+⋮----
+private async pruneOldTurns(sessionId: string, keepLast: number): Promise<void>
+⋮----
+private async bustSessionCache(sessionId: string): Promise<void>
+</file>
+
+<file path=".gitignore">
+node_modules
+.env
+dist
+</file>
+
+<file path="docker-compose.yml">
+version: "3.9"
+
+services:
+  api:
+    build: .
+    container_name: rag_api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - qdrant
+      - minio
+      - ollama
+      - ollama-init
+      - postgres
+      - neo4j
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      S3_BUCKET_NAME: rag-images
+      S3_REGION: us-east-1
+      S3_USE_SSL: "false"
+      OLLAMA_BASE_URL: http://ollama:11434
+      # PostgreSQL
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: rag_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/rag_db
+      # Neo4j
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-neo4jpassword}
+
+  qdrant:
+    image: qdrant/qdrant:v1.17.0
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: ollama_init
+    depends_on:
+      - ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    entrypoint: ["sh", "-c"]
+    command: >
+      "sleep 5 &&
+       ollama pull llama3.2-vision:latest &&
+       ollama pull nomic-embed-text:latest &&
+       ollama pull gemma3:4b"
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: rag_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: rag_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.16.0
+    container_name: rag_neo4j
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-neo4jpassword}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_dbms_memory_heap_max__size: 2G
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p neo4jpassword 'RETURN 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: rag_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:
+  minio_data:
+  ollama_data:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:
+  redis_data:
+</file>
+
+<file path="src/rag/application/services/link.service.ts">
+import { Injectable, Inject } from '@nestjs/common';
+import pLimit from 'p-limit';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import {
+  IKnowledgeLink,
+  IKnowledgeLinkRepository,
+} from 'src/rag/domain/interfaces/knowledge-link.interface';
+import {
+  extractLinksFromMarkdown,
+  isLinkQuery,
+  isValidUrl,
+} from '../utils/link-extractor.util';
+import { CachePort } from 'src/rag/domain/ports/cache.port';
+import Redis from 'ioredis';
+⋮----
+export interface LinkSearchResult {
+  found: boolean;
+  links: IKnowledgeLink[];
+  block?: string;
+}
+⋮----
+function expandVariants(word: string): string[]
+⋮----
+function extractQueryKeywords(query: string): string[]
+⋮----
+function queryCacheKey(prefix: string, query: string): string
+⋮----
+export class LinkService
+⋮----
+constructor(
+⋮----
+async indexLinksFromFiles(
+    files: Array<{ originalname: string; buffer: Buffer }>,
+): Promise<
+⋮----
+async findLinksForQuery(query: string): Promise<LinkSearchResult>
+⋮----
+async findLinksForContext(query: string): Promise<LinkSearchResult>
+⋮----
+private filterValid(links: IKnowledgeLink[]): IKnowledgeLink[]
+⋮----
+private async filterReachable(links: IKnowledgeLink[]): Promise<IKnowledgeLink[]>
+⋮----
+private async isReachable(url: string, timeoutMs = LINK_CHECK_TIMEOUT_MS): Promise<boolean>
+⋮----
+private isAllowedStatus(status: number): boolean
+⋮----
+private linkScore(link: IKnowledgeLink, query: string, keywords: string[]): number
+⋮----
+private rankLinks(links: IKnowledgeLink[], query: string, keywords: string[]): IKnowledgeLink[]
+⋮----
+private formatLinksBlock(links: IKnowledgeLink[]): string
+⋮----
+private async redisGet<T>(key: string): Promise<T | null>
+⋮----
+private async redisSet(key: string, value: unknown, ttl: number): Promise<void>
+⋮----
+private async bustLinkCache(): Promise<void>
+</file>
+
+<file path="src/rag/infrastructure/neo4j/neo4j-knowledge-graph.service.ts">
+import { Injectable, Inject, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import neo4j, { Driver } from 'neo4j-driver';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+⋮----
+export interface KnowledgeGraphEntity {
+  id: string;
+  name: string;
+  type: string;
+  sourceDocument: string;
+  properties?: Record<string, any>;
+}
+⋮----
+export interface KnowledgeGraphRelationship {
+  id: string;
+  fromEntityId: string;
+  toEntityId: string;
+  type: string;
+  properties?: Record<string, any>;
+}
+⋮----
+export interface IKnowledgeGraphService {
+  getGraphStats(): Promise<{ totalEntities: number; totalRelationships: number; entityTypes: Record<string, number> }>;
+  addEntity(entity: KnowledgeGraphEntity): Promise<void>;
+  addRelationship(relationship: KnowledgeGraphRelationship): Promise<void>;
+  queryEntities(query: string): Promise<KnowledgeGraphEntity[]>;
+  getEntityById(id: string): Promise<KnowledgeGraphEntity | null>;
+  getRelatedEntities(entityId: string, depth?: number): Promise<KnowledgeGraphEntity[]>;
+  deleteEntity(id: string): Promise<void>;
+  clearGraph(): Promise<void>;
+}
+⋮----
+getGraphStats(): Promise<
+addEntity(entity: KnowledgeGraphEntity): Promise<void>;
+addRelationship(relationship: KnowledgeGraphRelationship): Promise<void>;
+queryEntities(query: string): Promise<KnowledgeGraphEntity[]>;
+getEntityById(id: string): Promise<KnowledgeGraphEntity | null>;
+getRelatedEntities(entityId: string, depth?: number): Promise<KnowledgeGraphEntity[]>;
+deleteEntity(id: string): Promise<void>;
+clearGraph(): Promise<void>;
+⋮----
+function isNoisyEntity(name: string, type: string): boolean
+⋮----
+function transliterateCyrillic(text: string): string
+⋮----
+function buildCanonicalId(name: string, type: string): string
+⋮----
+export class Neo4jKnowledgeGraphService
+implements IKnowledgeGraphService, OnModuleInit, OnModuleDestroy
+⋮----
+constructor(
+⋮----
+async onModuleInit(): Promise<void>
+⋮----
+async onModuleDestroy(): Promise<void>
+⋮----
+async addEntity(entity: KnowledgeGraphEntity): Promise<void>
+⋮----
+async addRelationship(rel: KnowledgeGraphRelationship): Promise<void>
+⋮----
+async queryEntities(query: string): Promise<KnowledgeGraphEntity[]>
+⋮----
+async getEntityById(id: string): Promise<KnowledgeGraphEntity | null>
+⋮----
+async getRelatedEntities(entityId: string, depth = 1): Promise<KnowledgeGraphEntity[]>
+⋮----
+async deleteEntity(id: string): Promise<void>
+⋮----
+async clearGraph(): Promise<void>
+⋮----
+async getGraphStats(): Promise<any>
+</file>
+
+<file path="src/rag/application/utils/hybrid-search.util.ts">
+import { RagQdrantService, SearchMode } from '../../infrastructure/qdrant/rag-qdrant.service';
+import { Embedding } from '../../domain/value-objects/embedding.vo';
+import { ConfigService } from '@nestjs/config';
+⋮----
+export interface HybridSearchResult {
+  id: string;
+  text: string;
+  parentText?: string;
+  parentId?: string;
+  vectorScore: number;
+  keywordScore: number;
+  hybridScore: number;
+  vector?: number[];
+}
+⋮----
+interface ModeConfig {
+  vectorWeight: number;
+  keywordWeight: number;
+  minKeywordMatch: number;
+  fetchMultiplier: number;
+}
+⋮----
+function bm25Score(text: string, keywords: string[], avgDocLength: number): number
+⋮----
+function minMaxNorm(results: HybridSearchResult[], field: keyof HybridSearchResult): void
+⋮----
+export class HybridSearchEngine
+⋮----
+constructor(
+⋮----
+async search(
+    collectionName: string,
+    queryEmbedding: Embedding,
+    keywords: string[],
+    limit: number = 10,
+    options: {
+      vectorWeight?:    number;
+      keywordWeight?:   number;
+      minKeywordMatch?: number;
+      searchMode?:      SearchMode | 'entity';
+      scoreThreshold?:  number;
+      minTextLength?:   number;
+      originalQuery?:   string;  // raw query for direct text scroll
+    } = {},
+): Promise<HybridSearchResult[] | null>
+⋮----
+originalQuery?:   string;  // raw query for direct text scroll
+⋮----
+// Search 1: by contextKeywords field (keyword index)
+⋮----
+// Search 2: by full-text on the text field (text index)
+// Use words from the original query directly — most reliable for cross-lingual match
+⋮----
+// Expand UA phrases to EN equivalents so English chunks are found
+⋮----
+// Words directly from the original query (highest priority)
+⋮----
+// Expanded from keywords + UA→EN mapping
+⋮----
+// Split multi-word keywords into single words and search text directly
+⋮----
+// Expand keywords: for multi-word UA phrases, also include each word separately
+// so "назва компанії" → also matches "company", "name", "назва", "компанія"
+⋮----
+// Add individual words from multi-word keywords
+⋮----
+// Add EN translations for known UA phrases
+</file>
+
+<file path="src/rag/infrastructure/config/rag-config.ts">
+import { registerAs } from '@nestjs/config';
+⋮----
+export interface HnswConfig {
+  m: number;
+  efConstruct: number;
+  efSearch?: number;
+}
+⋮----
+export type TRagConfig = {
+  ollamaBaseUrl: string;
+  ollamaEmbedModelText: string;
+  ollamaEmbedModelImage: string;
+  ollamaChatModel: string;
+  ollamaVisionModel: string;
+  ollamaApiKey: string | undefined;
+
+  qdrantUrl: string;
+  qdrantApiKey: string | undefined;
+
+  s3Endpoint: string | undefined;
+  s3AccessKey: string;
+  s3SecretKey: string;
+  s3BucketName: string;
+  s3Region: string;
+  s3UseSsl: boolean;
+  s3PublicUrl?: string;
+
+  textRagCollectionName: string;
+  textRagDefaultLimit: number;
+  textRagVectorSize: number;
+  textRagHnswConfig?: HnswConfig;
+  textRagScoreThreshold: number;
+
+  imageRagCollectionName: string;
+  imageRagVectorSize: number;
+  imageRagMinScoreThreshold: number;
+  imageRagHnswConfig?: HnswConfig;
+
+  neo4JUrl: string | undefined;
+  neo4jUser: string | undefined;
+  neo4jPassword: string | undefined;
+};
+⋮----
+const parseHnswConfig = (
+    m?: string,
+    efConstruct?: string,
+    efSearch?: string,
+): HnswConfig | undefined =>
+</file>
+
+<file path="src/rag/infrastructure/s3/s3.storage.service.ts">
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  CreateBucketCommand,
+  HeadBucketCommand,
+} from '@aws-sdk/client-s3';
+import { RAG_CONFIG, TRagConfig } from '../config/rag-config';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+⋮----
+export class S3StorageService implements OnModuleInit
+⋮----
+constructor(
+    private readonly configService: ConfigService,
+    @Inject('LoggerPort') private readonly logger: LoggerPort,
+)
+⋮----
+async onModuleInit(): Promise<void>
+⋮----
+private async ensureBucketExists(): Promise<void>
+⋮----
+async uploadFile(
+    key: string,
+    buffer: Buffer,
+    contentType: string,
+): Promise<string>
+⋮----
+async deleteFile(key: string): Promise<void>
+</file>
+
+<file path="src/app.module.ts">
+import { Module } from '@nestjs/common';
+import { RagModule } from './rag/rag.module';
+import { ConfigModule } from '@nestjs/config';
+import { ragConfig } from './rag/infrastructure/config/rag-config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+⋮----
+export class AppModule
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2021",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": true,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false
+  }
+}
+</file>
+
+<file path="src/rag/application/utils/query-transformer.util.ts">
+import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+import {
+  extractQueryNameVariants,
+  isEntityQuery,
+  cyrillicToLatin,
+} from './transliteration.util';
+import { Redis } from "@upstash/redis"
+⋮----
+export interface TransformedQuery {
+  original: string;
+  expanded: string[];
+  rephrased: string[];
+  keywords: string[];
+  isEntityQuery: boolean;
+}
+⋮----
+function uaStem(word: string): string
+⋮----
+function isEnglishQuery(query: string): boolean
+⋮----
+export function translateQueryToUkrainian(query: string): string[]
+⋮----
+function expandWithSynonyms(query: string): string[]
+⋮----
+export class QueryTransformer
+⋮----
+constructor(
+⋮----
+async transformQuery(query: string): Promise<TransformedQuery>
+⋮----
+private async expandQuery(query: string, isEntity: boolean): Promise<string[]>
+⋮----
+private async rephraseQuery(query: string, isEntity: boolean): Promise<string[]>
+⋮----
+private async extractKeywords(query: string, isEntity: boolean): Promise<string[]>
+</file>
+
+<file path="src/rag/infrastructure/qdrant/rag-qdrant.service.ts">
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { QdrantClient, Schemas } from '@qdrant/js-client-rest';
+import { QdrantCollectionConfigMapper } from './mappers/qdrant-collection-config.mapper';
+import { CollectionConfig } from 'src/rag/domain/value-objects/collection-config.vo';
+import { TRagConfig, RAG_CONFIG } from '../config/rag-config';
+⋮----
+export type SearchMode = 'precise' | 'wide' | 'balanced';
+⋮----
+export class RagQdrantService
+⋮----
+constructor(private readonly configService: ConfigService)
+⋮----
+async ensureCollectionWithConfig(config: CollectionConfig): Promise<void>
+⋮----
+async createPayloadIndex(
+    collectionName: string,
+    fieldName: string,
+    fieldType: 'text' | 'keyword' | 'integer' | 'float' | 'bool' | 'geo',
+): Promise<void>
+⋮----
+async upsert(
+    collectionName: string,
+    points: unknown[],
+): Promise<Schemas['UpdateResult']>
+⋮----
+async search(
+    collectionName: string,
+    params: {
+      vector: number[];
+      limit: number;
+      filter?: unknown;
+      score_threshold?: number | null;
+      params?: Record<string, unknown>;
+      searchMode?: SearchMode;
+      with_vector?: boolean;
+    },
+): Promise<Array<Schemas['ScoredPoint']>>
+⋮----
+async scroll(
+    collectionName: string,
+    params: {
+      limit: number;
+      offset?: string | number;
+      filter?: unknown;
+      with_payload?: boolean;
+    },
+): Promise<Schemas['ScrollResult']>
+⋮----
+async getPoints(
+    collectionName: string,
+    ids: (string | number)[],
+): Promise<Schemas['Record'][]>
+⋮----
+async deletePoints(
+    collectionName: string,
+    ids: (string | number)[],
+): Promise<Schemas['UpdateResult']>
+</file>
+
+<file path="src/rag/rag.module.ts">
+import { Module, OnModuleInit, Inject } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { ragConfig } from './infrastructure/config/rag-config';
+import { OllamaModule } from './infrastructure/ollama/ollama.module';
+import { S3Module } from './infrastructure/s3/s3.module';
+import { S3StorageService } from './infrastructure/s3/s3.storage.service';
+import { QdrantModule } from './infrastructure/qdrant/qdrant.module';
+import { PrismaModule } from './infrastructure/prisma/prisma.module';
+import { Neo4jModule } from './infrastructure/neo4j/neo4j.module';
+import { RedisModule } from './infrastructure/redis/redis.module';
+import { QdrantTextDocumentRepository } from './infrastructure/qdrant/repositories/qdrant-text-document.repository';
+import { QdrantImageDocumentRepository } from './infrastructure/qdrant/repositories/qdrant-image-document.repository';
+import { Neo4jKnowledgeGraphService } from './infrastructure/neo4j/neo4j-knowledge-graph.service';
+import { TextRagService } from './application/services/text-rag.service';
+import { ImageRagService } from './application/services/image-rag.service';
+import { RagCommandBusModule } from './shared/infrastructure/command-bus.module';
+import { CommandBusPort } from './shared/application/ports/command-bus.port';
+import { AskQuestionHandler } from './application/handlers/ask-question.handler';
+import { UploadKnowledgeHandler } from './application/handlers/upload-knowledge.handler';
+import { DeleteDocumentHandler } from './application/handlers/delete-document.handler';
+import { ProcessImagesHandler } from './application/handlers/process-images.handler';
+import { DeleteImageHandler } from './application/handlers/delete-image.handler';
+import { UploadFolderHandler } from './application/handlers/upload-folder.handler';
+import {
+  GetAllDocumentsHandler,
+  GetAllImagesHandler,
+  GetImagesByKeywordHandler,
+  RetrieveDocumentsHandler,
+} from './application/queries/rag-query.handlers';
+import { AskQuestionCommand } from './application/commands/ask-question.command';
+import { UploadKnowledgeCommand } from './application/commands/upload-knowledge.command';
+import { DeleteDocumentCommand } from './application/commands/delete-document.command';
+import { ProcessImagesCommand } from './application/commands/process-images.command';
+import { DeleteImageCommand } from './application/commands/delete-image.command';
+import { UploadFolderCommand } from './application/commands/upload-folder.command';
+import {
+  GetAllDocumentsQuery,
+  GetAllImagesQuery,
+  GetImagesByKeywordQuery,
+  RetrieveDocumentsQuery,
+} from './application/queries/rag.queries';
+import { RagDocumentsController } from './presentation/controllers/rag-documents.controller';
+import { RagImagesController } from './presentation/controllers/image.controller';
+import { ConsoleLoggerAdapter } from './shared/application/ports/console.logger.adapter';
+import { OllamaChatAdapter } from './infrastructure/ollama/ollama-chat.adapter';
+import { OllamaEmbeddingAdapter } from './infrastructure/ollama/ollama-embedding.adapter';
+import { ConfidenceService } from './application/services/confidence.service';
+import { LinkService } from './application/services/link.service';
+import { ChatController } from './presentation/controllers/chat.controller';
+import { KnowledgeLinkPrismaRepository } from './domain/repositories/knowledge-link-prisma.repository';
+import { LinksController } from './presentation/controllers/link.controller';
+import { ExtractLinksHandler } from './application/handlers/extract-links.handler';
+import { IndexLinksCommand } from './application/commands/extract-links.command';
+import { CacheModule } from './infrastructure/redis/cache.module';
+⋮----
+export class RagModule implements OnModuleInit
+⋮----
+constructor(
+⋮----
+onModuleInit(): void
+</file>
+
+<file path="package.json">
+{
+  "name": "rag-implementation",
+  "version": "1.0.0",
+  "description": "RAG Implementation with NestJS",
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/main",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "prisma db seed"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1029.0",
+    "@aws-sdk/s3-request-presigner": "^3.1029.0",
+    "@cedrugs/pdf-parse": "^1.0.0",
+    "@nestjs/axios": "^4.0.1",
+    "@nestjs/common": "^11.1.19",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.1.19",
+    "@nestjs/platform-express": "^11.1.19",
+    "@nestjs/swagger": "^11.2.7",
+    "@nestjs/terminus": "^11.1.1",
+    "@nestjs/throttler": "^6.5.0",
+    "@nestjs/typeorm": "^11.0.1",
+    "@prisma/client": "^6.2.0",
+    "@qdrant/qdrant-js": "1.17.0",
+    "@upstash/redis": "^1.37.0",
+    "axios": "^1.15.0",
+    "axios-retry": "^4.0.0",
+    "class-transformer": "0.5.1",
+    "class-validator": "^0.14.3",
+    "docx": "9.5.1",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.10.1",
+    "jszip": "3.10.1",
+    "mammoth": "1.11.0",
+    "multer": "^2.1.1",
+    "neo4j-driver": "^5.16.0",
+    "ollama": "0.6.3",
+    "p-limit": "^7.3.0",
+    "pdf-lib": "1.17.1",
+    "pdf-parse": "2.4.5",
+    "pdf2json": "4.0.1",
+    "pg": "^8.11.3",
+    "reflect-metadata": "0.2.0",
+    "rxjs": "7.8.1",
+    "sharp": "0.34.5",
+    "typeorm": "^0.3.19",
+    "uuid": "13.0.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.19",
+    "@nestjs/schematics": "^11.0.10",
+    "@types/express": "^4.17.17",
+    "@types/multer": "^1.4.7",
+    "@types/node": "^20.3.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "prisma": "^6.2.0",
+    "typescript": "^5.1.3"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  }
+}
+</file>
+
+<file path="src/rag/application/utils/query-classefire.util.ts">
+import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+import { SearchMode } from '../../infrastructure/qdrant/rag-qdrant.service';
+⋮----
+export type QueryType = 'entity' | 'factual' | 'wide';
+⋮----
+export interface QueryClassification {
+  type: QueryType;
+
+  confidence: number;
+
+  params: FineTuningParams;
+}
+⋮----
+export interface FineTuningParams {
+  limit: number;
+
+  scoreThreshold: number;
+
+  searchMode: SearchMode | 'entity';
+
+  useHybridSearch: boolean;
+
+  useQueryTransformation: boolean;
+
+  useReranking: boolean;
+
+  rerankStrategy: 'cross_encoder' | 'llm_based' | 'none' | 'hybrid';
+
+  useContextualCompression: boolean;
+
+  useParentExpansion: boolean;
+
+  useKnowledgeGraph: boolean;
+
+  useConversationMemory: boolean;
+
+  useCitationTracking: boolean;
+
+  temperature: number;
+
+  topP: number | undefined;
+
+  topK: number | undefined;
+
+  maxTokens: number;
+
+  repeatPenalty: number | undefined;
+
+  seed: number | undefined;
+}
+⋮----
+/**
+ * Heuristic pre-guard: returns 'wide' or 'factual' override when the query is
+ * clearly NOT about a human person, so the LLM never mis-classifies company /
+ * product names as "entity".
+ *
+ * Returns null when the query is ambiguous — let the LLM decide.
+ */
+function preGuardClassify(query: string): QueryType | null
+⋮----
+// Strong signals that this is a WHY/WHAT/ORIGIN question about a name or company
+⋮----
+// If query contains "tell me about / розкажи про" + non-person noun → wide
+⋮----
+// Signals that subject is NOT a human (company / tool / process / department words)
+⋮----
+export class QueryClassifier
+⋮----
+constructor(private readonly ollama: OllamaService)
+async classify(query: string): Promise<QueryClassification>
+⋮----
+private build(type: QueryType, confidence: number, params?: FineTuningParams): QueryClassification
+⋮----
+private default(): QueryClassification
+</file>
+
+<file path="src/rag/infrastructure/ollama/ollama.service.ts">
+import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios, { AxiosError } from 'axios';
+import axiosRetry from 'axios-retry';
+import { createHash } from 'crypto';
+import { Redis } from "@upstash/redis"
+import {
+  RAG_CONFIG,
+  TRagConfig,
+} from 'src/rag/infrastructure/config/rag-config';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { CachePort } from 'src/rag/domain/ports/cache.port';
+⋮----
+export interface LLMOptions {
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  maxTokens?: number;
+  stop?: string[];
+  systemPrompt?: string;
+  repeatPenalty?: number;
+  seed?: number;
+}
+⋮----
+export class OllamaService
+⋮----
+constructor(
+    private readonly configService: ConfigService,
+    @Inject('LoggerPort') private readonly logger: LoggerPort,
+    @Inject('CachePort') private readonly cache: CachePort,
+)
+⋮----
+private getHeaders()
+⋮----
+async embed(prompt: string): Promise<number[] | null>
+⋮----
+async extractKeywords(text: string): Promise<string[]>
+⋮----
+async getRagResponseByPrompt(
+    prompt: string,
+    options: LLMOptions = {},
+): Promise<string>
+⋮----
+async *getRagResponseByPromptStream(
+    prompt: string,
+    options: LLMOptions = {},
+): AsyncGenerator<string>
+⋮----
+async describeImage(file: Express.Multer.File): Promise<string>
+⋮----
+async healthCheck(): Promise<boolean>
+⋮----
+async listModels(): Promise<string[]>
+⋮----
+private getErrorMessage(error: unknown): string
+</file>
+
+<file path="src/rag/application/services/text-rag.service.ts">
+import { Injectable, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Redis } from "@upstash/redis"
+import { v4 as uuidv4 } from 'uuid';
+import { OllamaService } from 'src/rag/infrastructure/ollama/ollama.service';
+import { RagQdrantService } from 'src/rag/infrastructure/qdrant/rag-qdrant.service';
+import { ITextDocumentRepository } from '../../domain/repositories/text-document.repository';
+import { TextDocument } from '../../domain/entities/text-document.entity';
+import { Embedding } from '../../domain/value-objects/embedding.vo';
+import { chunkTextBySentences } from '../utils/text-chunk.util';
+import { extractEmbedding } from '../utils/embedding.util';
+import { extractFileText } from '../utils/file-text.util';
+import { RAG_CONFIG, TRagConfig } from '../../infrastructure/config/rag-config';
+import {
+  IDeleteDocument,
+  IDocumentWithEmbedding,
+  IDocumentWithoutEmbedding,
+  IGenerateAnswer,
+  IStreamChunk,
+  IUploadKnowledge,
+} from '../common/interfaces/rag-documents.interfaces';
+import { TextRagPort } from 'src/rag/domain/ports/textRagPort';
+import { UploadFolderOptions } from '../commands/upload-folder.command';
+import { PromptInjectionGuard } from '../guards/prompt-injection.guard';
+import {
+  semanticChunking,
+  parentChildChunking,
+  ChunkMetadata,
+} from '../utils/advanced-chunking.util';
+import { QueryTransformer, translateQueryToUkrainian } from '../utils/query-transformer.util';
+import { Reranker } from '../utils/reranker.util';
+import { HybridSearchEngine, HybridSearchResult } from '../utils/hybrid-search.util';
+import { ContextualCompressor } from '../utils/contextual-compression.util';
+import {
+  IKnowledgeGraphService,
+  KnowledgeGraphEntity,
+} from '../../infrastructure/neo4j/neo4j-knowledge-graph.service';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
+import { IConversationSessionRepository } from 'src/rag/domain/ports/conversation-session.repository.port';
+import { AskQuestionOptions } from '../commands/ask-question.command';
+import {
+  isEntityQuery,
+  enrichKeywordsWithVariants,
+  generateNameVariants,
+  cyrillicToLatin,
+} from '../utils/transliteration.util';
+import { SearchMode } from '../../infrastructure/qdrant/rag-qdrant.service';
+import { QueryClassifier, FineTuningParams, QueryClassification } from '../utils/query-classefire.util';
+import { IConfidencePort } from '../../domain/ports/confidence.port';
+import { LinkService } from './link.service';
+⋮----
+// Max classification cache entries before LRU eviction
+⋮----
+interface TrackCitation {
+  id: string;
+  documentId: string;
+  text: string;
+}
+⋮----
+interface RetrieveInternalOptions extends Pick<
+  AskQuestionOptions,
+  | 'useHybridSearch'
+  | 'useReranking'
+  | 'rerankStrategy'
+  | 'useQueryTransformation'
+  | 'useContextualCompression'
+  | 'useConversationMemory'
+  | 'sessionId'
+  | 'scoreThreshold'
+  | 'filters'
+> {
+  limit?: number;
+  _searchMode?: SearchMode | 'entity';
+}
+⋮----
+// Returned by prepareGenerationContext on success
+interface PreparedContext {
+  classification: QueryClassification;
+  p: FineTuningParams;
+  retrieved: IDocumentWithEmbedding[];
+  prompt: string;
+  generationParams: GenerationParams;
+}
+⋮----
+interface GenerationParams {
+  temperature: number;
+  topP: number | undefined;
+  topK: number | undefined;
+  maxTokens: number;
+  repeatPenalty: number | undefined;
+  seed: number | undefined;
+}
+⋮----
+function reciprocalRankFusion(
+  allResults: Array<Array<{ id: string; score: number }>>,
+  k = RRF_K,
+): Map<string, number>
+⋮----
+export class TextRagService implements TextRagPort
+⋮----
+// ── Classification cache (LRU-lite: evict oldest when full) ──────────────
+⋮----
+constructor(
+    private readonly configService: ConfigService,
+    private readonly ollama: OllamaService,
+    private readonly qdrantService: RagQdrantService,
+    @Inject('ITextDocumentRepository')
+    private readonly textRepository: ITextDocumentRepository,
+    @Inject('IConversationSessionRepository')
+    private readonly conversationRepository: IConversationSessionRepository,
+    @Inject('IKnowledgeGraphPort')
+    private readonly knowledgeGraph: IKnowledgeGraphService,
+    @Inject('LoggerPort')
+    private readonly logger: LoggerPort,
+    @Inject('IConfidencePort')
+    private readonly confidencePort: IConfidencePort,
+    private readonly linkService: LinkService,
+    @Inject('REDIS_CLIENT')
+    private readonly redis: Redis,
+)
+⋮----
+// ── Upload ────────────────────────────────────────────────────────────────
+⋮----
+async uploadKnowledgeFromFile(
+    file: Express.Multer.File,
+    options?: UploadFolderOptions,
+): Promise<IUploadKnowledge>
+⋮----
+async uploadMarkdownFolder(
+    files: Express.Multer.File[],
+    options?: UploadFolderOptions,
+): Promise<
+⋮----
+private async uploadWithSimple(text: string, embedModel: string): Promise<number>
+⋮----
+private async uploadWithSemantic(text: string, embedModel: string): Promise<number>
+⋮----
+private async uploadWithParentChild(
+    file: Express.Multer.File,
+    text: string,
+    embedModel: string,
+    options?: UploadFolderOptions,
+): Promise<number>
+⋮----
+private async prepareKeywordsForFile(
+    normalizedText: string,
+    filename: string,
+    rawText: string,
+): Promise<string[]>
+⋮----
+private sanitizeKeywords(keywords: string[]): string[]
+⋮----
+private extractNameTokens(query: string): string[][]
+⋮----
+private extractHeaderKeywords(rawText: string): string[]
+⋮----
+private extractUrlKeywords(text: string): string[]
+⋮----
+private splitDomainParts(raw: string, out: Set<string>): void
+⋮----
+private async extractTextKeywords(text: string): Promise<string[]>
+⋮----
+private async extractFilepathKeywords(filepath: string): Promise<string[]>
+⋮----
+private frequencyKeywords(sample: string): string[]
+⋮----
+private async embedAndSaveChunks(
+    chunks: string[],
+    embedModel: string,
+    batchSize = 100,
+): Promise<number>
+⋮----
+private buildFileId(originalname: string): string
+⋮----
+private async classifyQuery(query: string): Promise<QueryClassification>
+⋮----
+async retrieve(
+    query: string,
+    limit?: number,
+    options?: RetrieveInternalOptions,
+): Promise<Array<IDocumentWithEmbedding> | string>
+⋮----
+const chunkMatches = (text: string, groups: string[][]): boolean =>
+⋮----
+async getAllDocuments(): Promise<IDocumentWithoutEmbedding[]>
+⋮----
+// ── Shared generation context ─────────────────────────────────────────────
+//
+// Both generateAnswer and streamableGenerateAnswer call this.
+// Returns PreparedContext on success, or { earlyExit: string } when the
+// pipeline should short-circuit (no results / injection etc.).
+⋮----
+private async prepareGenerationContext(
+    query: string,
+    options?: AskQuestionOptions,
+): Promise<PreparedContext |
+⋮----
+// Kick off retrieve and links lookup in parallel
+⋮----
+// ── Score filtering (factual queries only) ──────────────────────────────
+⋮----
+// ── Knowledge graph ──────────────────────────────────────────────────────
+⋮----
+// ── Build prompt ─────────────────────────────────────────────────────────
+⋮----
+// ── Confidence check (extracted so it's independently testable) ───────────
+⋮----
+private async runConfidenceCheck(
+    query: string,
+    answer: string,
+    retrieved: IDocumentWithEmbedding[],
+): Promise<void>
+⋮----
+// ── Persist session turn (non-blocking helper) ────────────────────────────
+⋮----
+private persistSessionTurn(sessionId: string, query: string, answer: string): void
+⋮----
+// ── Prompt templates ──────────────────────────────────────────────────────
+⋮----
+private buildPrompt(
+    type: 'entity' | 'factual' | 'wide',
+    context: string,
+    query: string,
+): string
+⋮----
+// ── generateAnswer ────────────────────────────────────────────────────────
+⋮----
+async generateAnswer(
+    query: string,
+    options?: AskQuestionOptions,
+): Promise<IGenerateAnswer |
+⋮----
+// ── streamableGenerateAnswer ──────────────────────────────────────────────
+⋮----
+async *streamableGenerateAnswer(
+    query: string,
+    options?: AskQuestionOptions,
+): AsyncGenerator<IStreamChunk>
+⋮----
+// Emit metadata before first token so the client can show context info immediately
+⋮----
+// Stream tokens
+⋮----
+// Fire-and-forget confidence check — doesn't block done event
+⋮----
+// Citations
+⋮----
+// Persist conversation turn (non-blocking)
+⋮----
+// ── deleteById ────────────────────────────────────────────────────────────
+⋮----
+async deleteById(id: string): Promise<IDeleteDocument>
+⋮----
+// ── Citation tracking ─────────────────────────────────────────────────────
+⋮----
+private trackCitations(
+    answer: string,
+    retrievedDocs: Array<{ id: string; text: string }>,
+):
+⋮----
+private findSimilarContent(haystack: string, needle: string): boolean
+⋮----
+// ── Parent context expansion ──────────────────────────────────────────────
+⋮----
+private async expandToParentContext(
+    results: Array<IDocumentWithEmbedding>,
+): Promise<Array<IDocumentWithEmbedding>>
+⋮----
+// ── Knowledge graph ───────────────────────────────────────────────────────
+⋮----
+private async extractKnowledgeGraph(text: string, documentId: string): Promise<void>
+⋮----
+private async extractEntitiesAndRelations(
+    text: string,
+    sourceDocument: string,
+): Promise<
+⋮----
+private isNoisyEntity(name: string, type: string): boolean
+⋮----
+private buildCanonicalId(name: string, type: string): string
+⋮----
+private async queryKnowledgeGraph(query: string): Promise<string>
+</file>
+
+</files>

@@ -1,0 +1,113 @@
+---
+description: Presentation layer rules — controllers, DTOs only
+globs: src/rag/presentation/**/*
+alwaysApply: false
+---
+
+# Presentation Layer Rules
+
+## Core Principle
+Presentation layer is a thin transport layer.
+
+- MUST NOT contain business logic
+- MUST ONLY dispatch Commands/Queries
+- MUST be stateless
+
+---
+
+## Controllers
+
+### Required behavior
+Controllers MUST ONLY:
+1. Validate input via DTO + ValidationPipe
+2. Map input → Command/Query
+3. Dispatch via CommandBus
+4. Return handler result directly
+
+---
+
+### Forbidden behavior
+- Business logic (if/else rules, decisions)
+- Direct service/repository injection
+- Calling infrastructure or application services directly
+- Data transformation logic
+- Side effects
+
+---
+
+## Dependency Rules
+
+### Required
+- MUST inject ONLY:
+  - `CommandBus` (token: 'CommandBus')
+
+### Forbidden
+- application/services imports
+- infrastructure imports
+- repository injections
+
+---
+
+## Commands / Queries Dispatch
+
+### Required
+- Controllers MUST NOT contain logic
+- Controllers MUST delegate everything to handlers
+
+---
+
+## DTO Rules
+
+### Required
+- Every request MUST have a DTO class
+- DTOs MUST use class-validator decorators
+- DTOs MUST be explicit (no implicit any)
+
+### Validation
+- `whitelist: true` is enforced globally
+- Only decorated fields are allowed
+
+---
+
+## Swagger Rules
+
+### Required for ALL endpoints
+- `@ApiTags()` on controller
+- `@ApiOperation()` on each endpoint
+- `@ApiResponse()` for success response
+
+### Forbidden
+- undocumented endpoints
+
+---
+
+## File Uploads
+
+### Required
+- MUST use `FileInterceptor`
+- MUST use `@UploadedFile()`
+
+### Forbidden
+- raw Buffer in DTOs
+- manual multipart parsing
+
+---
+
+## Response Rules
+
+### Required
+- MUST return handler result directly
+- NO transformation in controller layer
+
+### Forbidden
+- mapping logic in controllers
+- formatting logic in controllers
+
+---
+
+## Anti-Patterns
+
+- Fat controllers
+- Inline business logic
+- Direct infra access
+- DTO reuse across different endpoints

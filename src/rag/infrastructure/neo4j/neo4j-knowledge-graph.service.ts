@@ -2,33 +2,11 @@ import { Injectable, Inject, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import neo4j, { Driver } from 'neo4j-driver';
 import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
-
-export interface KnowledgeGraphEntity {
-  id: string;
-  name: string;
-  type: string;
-  sourceDocument: string;
-  properties?: Record<string, any>;
-}
-
-export interface KnowledgeGraphRelationship {
-  id: string;
-  fromEntityId: string;
-  toEntityId: string;
-  type: string;
-  properties?: Record<string, any>;
-}
-
-export interface IKnowledgeGraphService {
-  getGraphStats(): Promise<{ totalEntities: number; totalRelationships: number; entityTypes: Record<string, number> }>;
-  addEntity(entity: KnowledgeGraphEntity): Promise<void>;
-  addRelationship(relationship: KnowledgeGraphRelationship): Promise<void>;
-  queryEntities(query: string): Promise<KnowledgeGraphEntity[]>;
-  getEntityById(id: string): Promise<KnowledgeGraphEntity | null>;
-  getRelatedEntities(entityId: string, depth?: number): Promise<KnowledgeGraphEntity[]>;
-  deleteEntity(id: string): Promise<void>;
-  clearGraph(): Promise<void>;
-}
+import {
+  IKnowledgeGraphPort,
+  KnowledgeGraphEntity,
+  KnowledgeGraphRelationship,
+} from 'src/rag/domain/ports/knowledge-graph.port';
 
 function isNoisyEntity(name: string, type: string): boolean {
   const trimmed = name.trim();
@@ -63,7 +41,7 @@ function buildCanonicalId(name: string, type: string): string {
 
 @Injectable()
 export class Neo4jKnowledgeGraphService
-  implements IKnowledgeGraphService, OnModuleInit, OnModuleDestroy
+  implements IKnowledgeGraphPort, OnModuleInit, OnModuleDestroy
 {
   private driver: Driver;
   private isEnabled = true;

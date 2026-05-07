@@ -10,6 +10,7 @@ exports.QdrantModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const rag_qdrant_service_1 = require("./rag-qdrant.service");
+const qdrant_vector_search_adapter_1 = require("./qdrant-vector-search.adapter");
 const qdrant_image_document_repository_1 = require("./repositories/qdrant-image-document.repository");
 const qdrant_text_document_repository_1 = require("./repositories/qdrant-text-document.repository");
 const ollama_module_1 = require("../ollama/ollama.module");
@@ -23,6 +24,11 @@ exports.QdrantModule = QdrantModule = __decorate([
         imports: [config_1.ConfigModule, ollama_module_1.OllamaModule, s3_module_1.S3Module],
         providers: [
             rag_qdrant_service_1.RagQdrantService,
+            qdrant_vector_search_adapter_1.QdrantVectorSearchAdapter,
+            {
+                provide: 'ITextVectorSearchPort',
+                useExisting: qdrant_vector_search_adapter_1.QdrantVectorSearchAdapter,
+            },
             qdrant_image_document_repository_1.QdrantImageDocumentRepository,
             qdrant_text_document_repository_1.QdrantTextDocumentRepository,
             {
@@ -40,6 +46,8 @@ exports.QdrantModule = QdrantModule = __decorate([
         ],
         exports: [
             rag_qdrant_service_1.RagQdrantService,
+            qdrant_vector_search_adapter_1.QdrantVectorSearchAdapter,
+            'ITextVectorSearchPort',
             qdrant_text_document_repository_1.QdrantTextDocumentRepository,
             qdrant_image_document_repository_1.QdrantImageDocumentRepository,
         ],

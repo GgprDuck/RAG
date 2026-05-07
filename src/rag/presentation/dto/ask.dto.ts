@@ -14,6 +14,7 @@ import {
   ValidateNested,
   IsEnum,
   IsBoolean,
+  IsDefined,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -46,6 +47,13 @@ export class MetadataFilter {
   @IsString()
   field: string;
 
+  @ApiProperty({
+    description: 'Value used by the filter operation',
+    example: 'hr',
+  })
+  @IsDefined()
+  value: unknown;
+
   @ApiPropertyOptional({
     description: 'Comparison operator',
     enum: ['eq', 'ne', 'gt', 'lt', 'gte', 'lte', 'in'],
@@ -67,6 +75,15 @@ export class AdvancedRagOptionsDto {
   @IsBoolean()
   useReranking?: boolean;
 
+  @ApiPropertyOptional({
+    enum: RerankStrategy,
+    description: 'Reranking strategy — set to "none" to disable reranking entirely',
+    default: RerankStrategy.NONE,
+  })
+  @IsOptional()
+  @IsEnum(RerankStrategy)
+  rerankStrategy?: RerankStrategy;
+
   @ApiPropertyOptional({ default: true, description: 'Expand and rephrase query before retrieval' })
   @IsOptional()
   @IsBoolean()
@@ -86,6 +103,16 @@ export class AdvancedRagOptionsDto {
   @IsOptional()
   @IsBoolean()
   useCitationTracking?: boolean;
+
+  @ApiPropertyOptional({ default: false, description: 'Include retrieval diagnostics in response metadata' })
+  @IsOptional()
+  @IsBoolean()
+  includeRetrievalDiagnostics?: boolean;
+
+  @ApiPropertyOptional({ default: true, description: 'Enable short-lived answer cache for repeated questions' })
+  @IsOptional()
+  @IsBoolean()
+  useAnswerCache?: boolean;
 
   @ApiPropertyOptional({ default: false, description: 'Enrich context with Neo4j knowledge graph entities' })
   @IsOptional()
@@ -184,7 +211,7 @@ export class AskDto {
 
   @ApiPropertyOptional({
     enum: RerankStrategy,
-    description: 'Reranking strategy for retrieved documents',
+    description: 'Deprecated: top-level reranking strategy. Prefer options.rerankStrategy.',
     default: RerankStrategy.NONE,
   })
   @IsOptional()

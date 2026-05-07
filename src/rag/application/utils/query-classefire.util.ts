@@ -1,5 +1,5 @@
-import { OllamaService } from '../../infrastructure/ollama/ollama.service';
-import { SearchMode } from '../../infrastructure/qdrant/rag-qdrant.service';
+import { IChatLlmPort } from 'src/rag/domain/ports/chat-llm.port';
+import type { TextVectorSearchMode as SearchMode } from 'src/rag/domain/ports/text-vector-search.port';
 
 export type QueryType = 'entity' | 'factual' | 'wide';
 
@@ -112,17 +112,30 @@ const PROFILE_BY_TYPE: Record<QueryType, FineTuningParams> = {
   },
 };
 
-/**
- * Heuristic pre-guard: returns 'wide' or 'factual' override when the query is
- * clearly NOT about a human person, so the LLM never mis-classifies company /
- * product names as "entity".
- *
- * Returns null when the query is ambiguous — let the LLM decide.
- */
 function preGuardClassify(query: string): QueryType | null {
-  const q = query.toLowerCase().replace(/[?!.,;:]/g, '').trim();
+  const raw = query.trim();
+  const q = raw.toLowerCase().replace(/[?!.,;:]/g, '').trim();
 
-  // Strong signals that this is a WHY/WHAT/ORIGIN question about a name or company
+  const looksLikePersonSubject = (subjectRaw: string): boolean => {
+    const subject = subjectRaw.trim();
+    if (!subject || /\d/.test(subject)) return false;
+    const tokens = subject
+      .split(/\s+/)
+      .map((t) => t.replace(/^[^\p{L}]+|[^\p{L}'-]+$/gu, ''))
+      .filter(Boolean);
+    if (tokens.length === 0 || tokens.length > 3) return false;
+
+    const nonPersonWords = new Set([
+      'onix', 'company', 'компанія', 'department', 'департамент', 'відділ',
+      'team', 'команда', 'product', 'tool', 'academy', 'platform', 'system',
+      'hr', 'qa', 'node', 'react',
+    ]);
+    if (tokens.some((t) => nonPersonWords.has(t.toLowerCase()))) return false;
+
+    const capitalizedCount = tokens.filter((t) => /^[\p{Lu}][\p{L}'-]*$/u.test(t)).length;
+    return capitalizedCount >= 1;
+  };
+
   const isNameOriginQuery =
     /\b(why|what|what is)\b.{0,30}\b(name|called|named|mean|origin|history|founded|create)\b/i.test(q) ||
     /\b(name|назв).{0,20}\b(company|компан|brand|бренд)\b/i.test(q) ||
@@ -130,22 +143,45 @@ function preGuardClassify(query: string): QueryType | null {
 
   if (isNameOriginQuery) return 'factual';
 
-  // If query contains "tell me about / розкажи про" + non-person noun → wide
+  const isWhatIs =
+    /^(what is|what are|що таке|що це|що таке|що є)\s+\S+(\s+\S+)?$/.test(q);
+  if (isWhatIs) return 'wide';
+
+  const aboutSingleSubjectMatch = raw.match(
+    /^(tell me about|describe|overview of|розкажи про|опиши)\s+(.+)$/i,
+  );
+  if (aboutSingleSubjectMatch) {
+    const subject = aboutSingleSubjectMatch[2].trim();
+    if (subject.split(/\s+/).length <= 3 && !looksLikePersonSubject(subject)) {
+      return 'wide';
+    }
+  }
+
   const isAboutSomething =
     /\b(tell me about|describe|overview of|what are)\b/i.test(q) ||
     /\b(розкажи|опиши|що таке|що це)\b/i.test(q);
 
-  // Signals that subject is NOT a human (company / tool / process / department words)
   const hasNonPersonSubject =
     /\b(company|компан|organization|product|tool|department|відділ|команд|team|process|процес|academy|академі|platform|system|системи|software)\b/i.test(q);
 
   if (isAboutSomething && hasNonPersonSubject) return 'wide';
 
+  const tokens = q.split(/\s+/).filter(t => t.length > 0);
+  const stopWords = new Set(['what','is','are','who','how','tell','me','about','the','a','an']);
+  const meaningfulTokens = tokens.filter(t => !stopWords.has(t));
+  if (
+    meaningfulTokens.length === 1 &&
+    /^[a-z]/.test(meaningfulTokens[0]) &&
+    ['onix', 'company', 'product', 'tool', 'department', 'academy'].includes(meaningfulTokens[0])
+  ) {
+    return 'wide';
+  }
+
   return null;
 }
 
 export class QueryClassifier {
-  constructor(private readonly ollama: OllamaService) {}
+  constructor(private readonly chatLlm: IChatLlmPort) {}
   async classify(query: string): Promise<QueryClassification> {
 
     const preGuard = preGuardClassify(query);
@@ -193,7 +229,7 @@ Query: "${query}"
 JSON: {"type": "entity" | "factual" | "wide", "confidence": 0.0-1.0}`;
 
     try {
-      const raw = await this.ollama.getRagResponseByPrompt(prompt, {
+      const raw = await this.chatLlm.complete(prompt, {
         temperature: 0,
         maxTokens:   60,
         topK:        1,

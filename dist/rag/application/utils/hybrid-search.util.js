@@ -54,9 +54,9 @@ function minMaxNorm(results, field) {
     }
 }
 class HybridSearchEngine {
-    constructor(qdrantService, configService) {
-        this.qdrantService = qdrantService;
-        this.configService = configService;
+    constructor(vectorSearch, logger) {
+        this.vectorSearch = vectorSearch;
+        this.logger = logger;
     }
     async search(collectionName, queryEmbedding, keywords, limit = 10, options = {}) {
         const mode = options.searchMode ?? 'balanced';
@@ -67,13 +67,15 @@ class HybridSearchEngine {
         const minKeywordMatch = options.minKeywordMatch ?? cfg.minKeywordMatch;
         const minTextLength = options.minTextLength ?? 80;
         const fetchLimit = limit * cfg.fetchMultiplier;
-        const vectorResults = await this.qdrantService.search(collectionName, {
+        const vectorResults = await this.vectorSearch.search(collectionName, {
             vector: queryEmbedding.values,
             limit: fetchLimit,
             searchMode: qdrantMode,
             score_threshold: null,
             with_vector: true,
+            ...(options.filter ? { filter: options.filter } : {}),
         });
+        this.logger?.log('HybridSearch_vectorResults', { count: vectorResults.length, mode });
         const useKeywordScroll = (mode === 'entity' || mode === 'balanced' || mode === 'wide') && keywords.length > 0;
         let keywordScrollPoints = [];
         if (useKeywordScroll) {
@@ -120,17 +122,20 @@ class HybridSearchEngine {
             }));
             const allClauses = [...contextKwClauses, ...textClauses];
             try {
-                const scrollResult = await this.qdrantService.scroll(collectionName, {
+                const scrollResult = await this.vectorSearch.scroll(collectionName, {
                     limit: 200,
                     with_payload: true,
                     filter: {
-                        must: [{ key: 'textLength', range: { gte: 20 } }],
+                        must: [
+                            { key: 'textLength', range: { gte: 20 } },
+                            ...(options.filter ? [options.filter] : []),
+                        ],
                         should: allClauses,
                     },
                 });
                 keywordScrollPoints = (scrollResult.points ?? []).map(p => ({
-                    id: p.id.toString(),
-                    payload: (p.payload ?? {}),
+                    id: p.id,
+                    payload: p.payload,
                 }));
             }
             catch {
@@ -138,14 +143,14 @@ class HybridSearchEngine {
         }
         const vectorIds = new Set(vectorResults.map(r => r.id.toString()));
         const vectorUnified = vectorResults.map(r => ({
-            id: r.id.toString(),
+            id: r.id,
             text: r.payload?.text || '',
             parentText: r.payload?.parentText,
             parentId: r.payload?.parentId,
             vectorScore: r.score ?? 0,
             keywordScore: 0,
             hybridScore: 0,
-            vector: Array.isArray(r.vector) ? r.vector : undefined,
+            vector: r.vector,
         }));
         const scrollUnified = keywordScrollPoints
             .filter(p => !vectorIds.has(p.id))
@@ -193,7 +198,7 @@ class HybridSearchEngine {
             const contextKwMap = new Map();
             for (const r of vectorResults) {
                 const ck = r.payload?.contextKeywords ?? [];
-                contextKwMap.set(r.id.toString(), ck.map(k => k.toLowerCase()));
+                contextKwMap.set(r.id, ck.map(k => k.toLowerCase()));
             }
             for (const p of keywordScrollPoints) {
                 const ck = p.payload.contextKeywords ?? [];

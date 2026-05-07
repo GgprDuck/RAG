@@ -1,6 +1,11 @@
-import { RagQdrantService, SearchMode } from '../../infrastructure/qdrant/rag-qdrant.service';
 import { Embedding } from '../../domain/value-objects/embedding.vo';
-import { ConfigService } from '@nestjs/config';
+import { LoggerPort } from '../../shared/application/ports/logger.port';
+import type {
+  ITextVectorSearchPort,
+  TextVectorSearchMode,
+} from 'src/rag/domain/ports/text-vector-search.port';
+
+export type SearchMode = TextVectorSearchMode;
 
 export interface HybridSearchResult {
   id: string;
@@ -78,8 +83,8 @@ function minMaxNorm(results: HybridSearchResult[], field: keyof HybridSearchResu
 
 export class HybridSearchEngine {
   constructor(
-    private readonly qdrantService: RagQdrantService,
-    private readonly configService: ConfigService,
+    private readonly vectorSearch: ITextVectorSearchPort,
+    private readonly logger?: LoggerPort,
   ) {}
 
   async search(
@@ -94,7 +99,8 @@ export class HybridSearchEngine {
       searchMode?:      SearchMode | 'entity';
       scoreThreshold?:  number;
       minTextLength?:   number;
-      originalQuery?:   string;  // raw query for direct text scroll
+      originalQuery?:   string; 
+      filter?:          unknown;
     } = {},
   ): Promise<HybridSearchResult[] | null> {
     const mode = options.searchMode ?? 'balanced';
@@ -108,25 +114,27 @@ export class HybridSearchEngine {
     const minTextLength   = options.minTextLength ?? 80;
     const fetchLimit      = limit * cfg.fetchMultiplier;
 
-    const vectorResults = await this.qdrantService.search(collectionName, {
+    const vectorResults = await this.vectorSearch.search(collectionName, {
       vector:          queryEmbedding.values,
       limit:           fetchLimit,
       searchMode:      qdrantMode,
       score_threshold: null,
       with_vector:     true,
+      ...(options.filter ? { filter: options.filter } : {}),
     });
+
+    this.logger?.log('HybridSearch_vectorResults', { count: vectorResults.length, mode });
 
     const useKeywordScroll = (mode === 'entity' || mode === 'balanced' || mode === 'wide') && keywords.length > 0;
     let keywordScrollPoints: Array<{ id: string; payload: Record<string, any> }> = [];
     if (useKeywordScroll) {
-      // Search 1: by contextKeywords field (keyword index)
       const contextKwClauses = keywords.slice(0, 15).map(kw => ({
         key:   'contextKeywords',
         match: { value: kw.toLowerCase() },
       }));
 
-      // Search 2: by full-text on the text field (text index)
-      // Use words from the original query directly — most reliable for cross-lingual match
+      
+      
       const queryWords = options.originalQuery
         ? [...new Set(
             options.originalQuery
@@ -137,7 +145,7 @@ export class HybridSearchEngine {
           )]
         : [];
 
-      // Expand UA phrases to EN equivalents so English chunks are found
+      
       const UA_TO_EN_SCROLL: Record<string, string[]> = {
         'назва компанії':                    ['company', 'name', 'brand', 'called', 'named'],
         'назва та історія компанії':         ['company', 'history', 'name', 'founded', 'established'],
@@ -156,9 +164,9 @@ export class HybridSearchEngine {
       };
 
       const expandedForScroll = new Set<string>([
-        // Words directly from the original query (highest priority)
+        
         ...queryWords,
-        // Expanded from keywords + UA→EN mapping
+        
         ...keywords.flatMap(kw => {
           const kl = kw.toLowerCase();
           const words = kl.split(/\s+/).filter(w => w.length > 2);
@@ -167,7 +175,7 @@ export class HybridSearchEngine {
         }),
       ]);
 
-      // Split multi-word keywords into single words and search text directly
+      
       const textSearchWords = [...expandedForScroll].filter(w => w.length > 2).slice(0, 20);
 
       const textClauses = textSearchWords.map(word => ({
@@ -178,17 +186,20 @@ export class HybridSearchEngine {
       const allClauses = [...contextKwClauses, ...textClauses];
 
       try {
-        const scrollResult = await this.qdrantService.scroll(collectionName, {
+        const scrollResult = await this.vectorSearch.scroll(collectionName, {
           limit:        200,
           with_payload: true,
           filter: {
-            must:   [{ key: 'textLength', range: { gte: 20 } }],
+            must:   [
+              { key: 'textLength', range: { gte: 20 } },
+              ...(options.filter ? [options.filter] : []),
+            ],
             should: allClauses,
           },
         });
         keywordScrollPoints = (scrollResult.points ?? []).map(p => ({
-          id:      p.id.toString(),
-          payload: (p.payload ?? {}) as Record<string, any>,
+          id:      p.id,
+          payload: p.payload as Record<string, any>,
         }));
       } catch {
       }
@@ -197,14 +208,14 @@ export class HybridSearchEngine {
     const vectorIds = new Set(vectorResults.map(r => r.id.toString()));
 
     const vectorUnified: HybridSearchResult[] = vectorResults.map(r => ({
-      id:           r.id.toString(),
+      id:           r.id,
       text:         (r.payload?.text as string) || '',
       parentText:   r.payload?.parentText as string | undefined,
       parentId:     r.payload?.parentId as string | undefined,
       vectorScore:  r.score ?? 0,
       keywordScore: 0,
       hybridScore:  0,
-      vector:       Array.isArray(r.vector) ? (r.vector as number[]) : undefined,
+      vector:       r.vector,
     }));
 
     const scrollUnified: HybridSearchResult[] = keywordScrollPoints
@@ -232,8 +243,8 @@ export class HybridSearchEngine {
     const working = meaningful.length > 0 ? meaningful : unified;
 
     if (keywords.length > 0) {
-      // Expand keywords: for multi-word UA phrases, also include each word separately
-      // so "назва компанії" → also matches "company", "name", "назва", "компанія"
+      
+      
       const UA_TO_EN_KEYWORD_MAP: Record<string, string[]> = {
         'назва компанії': ['company name', 'company', 'name', 'brand', 'called'],
         'назва та історія компанії': ['company', 'history', 'name', 'founded', 'established'],
@@ -248,9 +259,9 @@ export class HybridSearchEngine {
       const expandedKeywords = new Set<string>(keywords.map(k => k.toLowerCase()));
       for (const kw of keywords) {
         const kl = kw.toLowerCase();
-        // Add individual words from multi-word keywords
+        
         kl.split(/\s+/).filter(w => w.length > 2).forEach(w => expandedKeywords.add(w));
-        // Add EN translations for known UA phrases
+        
         const enVariants = UA_TO_EN_KEYWORD_MAP[kl];
         if (enVariants) enVariants.forEach(v => expandedKeywords.add(v));
       }
@@ -259,7 +270,7 @@ export class HybridSearchEngine {
       const contextKwMap = new Map<string, string[]>();
       for (const r of vectorResults) {
         const ck = (r.payload?.contextKeywords as string[] | undefined) ?? [];
-        contextKwMap.set(r.id.toString(), ck.map(k => k.toLowerCase()));
+        contextKwMap.set(r.id, ck.map(k => k.toLowerCase()));
       }
       for (const p of keywordScrollPoints) {
         const ck = (p.payload.contextKeywords as string[] | undefined) ?? [];

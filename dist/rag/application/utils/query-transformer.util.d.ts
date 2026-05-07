@@ -1,4 +1,4 @@
-import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+import { IChatLlmPort } from "../../domain/ports/chat-llm.port";
 import { Redis } from "@upstash/redis";
 export interface TransformedQuery {
     original: string;
@@ -9,10 +9,10 @@ export interface TransformedQuery {
 }
 export declare function translateQueryToUkrainian(query: string): string[];
 export declare class QueryTransformer {
-    private readonly ollamaService;
+    private readonly chatLlm;
     private readonly redis?;
-    constructor(ollamaService: OllamaService, redis?: Redis | undefined);
-    transformQuery(query: string): Promise<TransformedQuery>;
+    constructor(chatLlm: IChatLlmPort, redis?: Redis | undefined);
+    transformQuery(query: string, isEntityOverride?: boolean): Promise<TransformedQuery>;
     private expandQuery;
     private rephraseQuery;
     private extractKeywords;

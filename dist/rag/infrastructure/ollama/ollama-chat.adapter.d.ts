@@ -6,4 +6,5 @@ export declare class OllamaChatAdapter implements IChatLlmPort {
     complete(prompt: string, options?: LlmOptions): Promise<string>;
     describeImage(imageBuffer: Buffer, mimeType: string): Promise<string>;
     extractKeywords(text: string): Promise<string[]>;
+    stream(prompt: string, options?: LlmOptions): AsyncGenerator<string>;
 }

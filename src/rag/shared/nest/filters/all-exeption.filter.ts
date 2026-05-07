@@ -4,11 +4,14 @@ import {
     ArgumentsHost,
     HttpException,
     HttpStatus,
+    Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
+  private readonly logger = new Logger(AllExceptionsFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -50,16 +53,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
         : 'UNKNOWN';
 
     if (status === 500) {
-      console.error('[UNHANDLED ERROR]', {
-        timestamp: new Date().toISOString(),
-        path: url,
-        method,
-        exception,
-      });
-    } else {
-      console.warn(
-        `[${status}] ${method} ${url}: ${message}`,
+      const trace =
+        exception instanceof Error ? exception.stack : JSON.stringify(exception);
+      this.logger.error(
+        `[UNHANDLED ERROR] ${method} ${url} at ${new Date().toISOString()}`,
+        trace,
       );
+    } else {
+      this.logger.warn(`[${status}] ${method} ${url}: ${message}`);
     }
 
     if (

@@ -14,17 +14,13 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TextRagService = void 0;
 const common_1 = require("@nestjs/common");
-const config_1 = require("@nestjs/config");
 const redis_1 = require("@upstash/redis");
 const uuid_1 = require("uuid");
-const ollama_service_1 = require("../../infrastructure/ollama/ollama.service");
-const rag_qdrant_service_1 = require("../../infrastructure/qdrant/rag-qdrant.service");
 const text_document_entity_1 = require("../../domain/entities/text-document.entity");
 const embedding_vo_1 = require("../../domain/value-objects/embedding.vo");
 const text_chunk_util_1 = require("../utils/text-chunk.util");
 const embedding_util_1 = require("../utils/embedding.util");
 const file_text_util_1 = require("../utils/file-text.util");
-const rag_config_1 = require("../../infrastructure/config/rag-config");
 const prompt_injection_guard_1 = require("../guards/prompt-injection.guard");
 const advanced_chunking_util_1 = require("../utils/advanced-chunking.util");
 const query_transformer_util_1 = require("../utils/query-transformer.util");
@@ -39,6 +35,7 @@ const UPLOAD_CONCURRENCY = 3;
 const EMBED_BATCH_SIZE = 10;
 const MAX_CONTEXT_CHARS = 6000;
 const RRF_K = 60;
+const ANSWER_CACHE_TTL_SEC = 60 * 3;
 const KEYWORD_STOP_WORDS = new Set([
     'what', 'is', 'are', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for',
     'of', 'with', 'by', 'from', 'and', 'or', 'but', 'how', 'when',
@@ -49,7 +46,6 @@ const KEYWORD_STOP_WORDS = new Set([
     'чи', 'або', 'та', 'це', 'є', 'у', 'в', 'на', 'до', 'по', 'про', 'за',
 ]);
 const FACTUAL_SCORE_THRESHOLD_CAP = 0.65;
-const CLASSIFICATION_CACHE_MAX = 500;
 function reciprocalRankFusion(allResults, k = RRF_K) {
     const rrfScores = new Map();
     for (const results of allResults) {
@@ -61,27 +57,28 @@ function reciprocalRankFusion(allResults, k = RRF_K) {
     return rrfScores;
 }
 let TextRagService = class TextRagService {
-    constructor(configService, ollama, qdrantService, textRepository, conversationRepository, knowledgeGraph, logger, confidencePort, linkService, redis) {
-        this.configService = configService;
-        this.ollama = ollama;
-        this.qdrantService = qdrantService;
+    constructor(vectorSearch, ragSettings, textRepository, conversationRepository, knowledgeGraph, logger, confidencePort, embeddingPort, chatLlmPort, linkService, ragContextFormatting, redis, cache) {
+        this.vectorSearch = vectorSearch;
+        this.ragSettings = ragSettings;
         this.textRepository = textRepository;
         this.conversationRepository = conversationRepository;
         this.knowledgeGraph = knowledgeGraph;
         this.logger = logger;
         this.confidencePort = confidencePort;
+        this.embeddingPort = embeddingPort;
+        this.chatLlmPort = chatLlmPort;
         this.linkService = linkService;
+        this.ragContextFormatting = ragContextFormatting;
         this.redis = redis;
-        this.classificationCache = new Map();
-        this.queryTransformer = new query_transformer_util_1.QueryTransformer(this.ollama, this.redis);
-        this.reranker = new reranker_util_1.Reranker(this.ollama);
-        this.hybridSearch = new hybrid_search_util_1.HybridSearchEngine(this.qdrantService, this.configService);
-        this.contextualCompressor = new contextual_compression_util_1.ContextualCompressor(this.ollama);
-        this.queryClassifier = new query_classefire_util_1.QueryClassifier(this.ollama);
+        this.cache = cache;
+        this.queryTransformer = new query_transformer_util_1.QueryTransformer(this.chatLlmPort, this.redis);
+        this.reranker = new reranker_util_1.Reranker(this.chatLlmPort, this.embeddingPort);
+        this.hybridSearch = new hybrid_search_util_1.HybridSearchEngine(this.vectorSearch, this.logger);
+        this.contextualCompressor = new contextual_compression_util_1.ContextualCompressor(this.embeddingPort, this.chatLlmPort);
+        this.queryClassifier = new query_classefire_util_1.QueryClassifier(this.chatLlmPort);
     }
     async uploadKnowledgeFromFile(file, options) {
-        const ragConfig = this.configService.get(rag_config_1.RAG_CONFIG);
-        const embedModel = ragConfig?.ollamaEmbedModelText || 'nomic-embed-text';
+        const { ollamaEmbedModelText: embedModel } = this.ragSettings.get();
         const { chunkingStrategy = 'simple', enableKnowledgeGraph = false, } = options || {};
         const text = await (0, file_text_util_1.extractFileText)(file);
         this.logger.log('Processing file', { name: file.originalname, strategy: chunkingStrategy });
@@ -139,7 +136,7 @@ let TextRagService = class TextRagService {
         return this.embedAndSaveChunks(chunks, embedModel);
     }
     async uploadWithSemantic(text, embedModel) {
-        const semanticChunks = await (0, advanced_chunking_util_1.semanticChunking)(text, this.ollama, {
+        const semanticChunks = await (0, advanced_chunking_util_1.semanticChunking)(text, this.embeddingPort, {
             minChunkSize: 100,
             maxChunkSize: 500,
         });
@@ -150,8 +147,7 @@ let TextRagService = class TextRagService {
         return this.embedAndSaveChunks(chunks, embedModel);
     }
     async uploadWithParentChild(file, text, embedModel, options) {
-        const ragConfig = this.configService.get(rag_config_1.RAG_CONFIG);
-        const vectorSize = ragConfig?.textRagVectorSize ?? 768;
+        const { textRagVectorSize: vectorSize } = this.ragSettings.get();
         const pcOpts = options?.parentChild ?? {};
         const fileId = this.buildFileId(file.originalname);
         const rawText = file.buffer.toString('utf-8');
@@ -193,7 +189,7 @@ let TextRagService = class TextRagService {
         let savedCount = 0;
         for (let i = 0; i < validChildren.length; i += EMBED_BATCH_SIZE) {
             const batch = validChildren.slice(i, i + EMBED_BATCH_SIZE);
-            const embeddings = await Promise.all(batch.map(c => this.ollama.embed(c.text)));
+            const embeddings = await Promise.all(batch.map(c => this.embeddingPort.embed(c.text)));
             const docs = batch.map((chunk, idx) => text_document_entity_1.TextDocument.create((0, uuid_1.v4)(), chunk.text, (0, embedding_util_1.extractEmbedding)(embeddings[idx]), embedModel, new Date(), chunk.metadata.chunkId, chunk.metadata.level, chunk.metadata.startIndex, chunk.metadata.endIndex, chunk.metadata.childIds, chunk.metadata.parentId, chunk.metadata.parentText, keywords));
             await this.textRepository.saveMany(docs);
             savedCount += docs.length;
@@ -319,7 +315,7 @@ let TextRagService = class TextRagService {
                 `Do NOT translate or modify proper names (person names, company names).\n` +
                 `Example: react, frontend, компоненти, components, state, стан\n\n` +
                 `Text:\n${sample}\n\nKeywords:`;
-            const response = await this.ollama.getRagResponseByPrompt(prompt, {
+            const response = await this.chatLlmPort.complete(prompt, {
                 temperature: 0.2, maxTokens: 150,
             });
             const keywords = response
@@ -362,7 +358,7 @@ let TextRagService = class TextRagService {
         const documents = [];
         for (let i = 0; i < chunks.length; i += batchSize) {
             const batch = chunks.slice(i, Math.min(i + batchSize, chunks.length));
-            const embeddings = await Promise.all(batch.map(c => this.ollama.embed(c)));
+            const embeddings = await Promise.all(batch.map(c => this.embeddingPort.embed(c)));
             const batchDocs = batch.map((chunk, idx) => text_document_entity_1.TextDocument.create((0, uuid_1.v4)(), chunk, (0, embedding_util_1.extractEmbedding)(embeddings[idx]), embedModel, new Date()));
             documents.push(...batchDocs);
             await this.textRepository.saveMany(batchDocs);
@@ -378,8 +374,9 @@ let TextRagService = class TextRagService {
     }
     async classifyQuery(query) {
         const key = `classification:${query.trim().toLowerCase().slice(0, 120)}`;
+        const ttl = 60 * 60;
         try {
-            const cached = await this.redis.get(key);
+            const cached = await this.cache.get(key);
             if (cached) {
                 return cached;
             }
@@ -388,8 +385,9 @@ let TextRagService = class TextRagService {
             this.logger.warn('classifyQuery: Redis get failed', { error: err?.message });
         }
         const result = await this.queryClassifier.classify(query);
+        this.logger.log('classifyQuery_result', { type: result.type, confidence: result.confidence });
         try {
-            await this.redis.set(key, JSON.stringify(result), { ex: 60 * 60 });
+            await this.cache.set(key, result, ttl);
         }
         catch (err) {
             this.logger.warn('classifyQuery: Redis set failed', { error: err?.message });
@@ -397,21 +395,23 @@ let TextRagService = class TextRagService {
         return result;
     }
     async retrieve(query, limit, options) {
-        const ragConfig = this.configService.get(rag_config_1.RAG_CONFIG);
-        const effectiveLimit = limit ?? options?.limit ?? ragConfig?.textRagDefaultLimit ?? 6;
-        const { useHybridSearch, useReranking, rerankStrategy, useQueryTransformation, useContextualCompression, useConversationMemory, sessionId, scoreThreshold, _searchMode, } = options || {};
-        const entityQuery = (0, transliteration_util_1.isEntityQuery)(query);
-        const collectionName = ragConfig?.textRagCollectionName;
+        const { textRagDefaultLimit: defaultLimit, textRagCollectionName: collectionFromSettings } = this.ragSettings.get();
+        const effectiveLimit = limit ?? options?.limit ?? defaultLimit;
+        const { useHybridSearch, useReranking, rerankStrategy, useQueryTransformation, useContextualCompression, useConversationMemory, sessionId, scoreThreshold, filters, _searchMode, } = options || {};
+        const collectionName = collectionFromSettings;
         if (!collectionName)
             return 'RAG text collection name is not configured';
-        const searchMode = _searchMode ?? (entityQuery ? 'entity' : 'balanced');
+        const searchMode = _searchMode ?? 'balanced';
+        const isEntityMode = searchMode === 'entity';
+        const shouldUseHybridSearch = useHybridSearch !== false;
+        const metadataFilter = this.buildMetadataFilter(filters);
         let keywords = [];
         let queriesToEmbed = [query];
         let uaStartIndex = -1;
         let uaTranslations = [];
         if (useQueryTransformation) {
             try {
-                const transformed = await this.queryTransformer.transformQuery(query);
+                const transformed = await this.queryTransformer.transformQuery(query, isEntityMode);
                 keywords = transformed.keywords.filter(kw => kw.length > 2 && !KEYWORD_STOP_WORDS.has(kw.toLowerCase()));
                 const isShortQuery = query.trim().split(/\s+/).length <= 3;
                 queriesToEmbed = isShortQuery
@@ -435,6 +435,10 @@ let TextRagService = class TextRagService {
                 keywords = [];
             }
         }
+        this.logger.log('retrieve_keywords', { count: keywords.length, sample: keywords.slice(0, 5) });
+        if (keywords.length === 0) {
+            keywords = this.extractFallbackKeywords(query);
+        }
         if (useConversationMemory && sessionId) {
             const history = await this.conversationRepository.getHistory(sessionId, 2);
             if (history.length > 0) {
@@ -442,23 +446,34 @@ let TextRagService = class TextRagService {
                 queriesToEmbed = queriesToEmbed.slice(0, 6);
             }
         }
-        const embeddings = await Promise.all(queriesToEmbed.map(q => this.ollama.embed(q)));
-        const primaryEmbedding = new embedding_vo_1.Embedding((0, embedding_util_1.extractEmbedding)(embeddings[0]));
+        const rawEmbeddings = await Promise.all(queriesToEmbed.map(q => this.embeddingPort.embed(q)));
+        const embeddings = rawEmbeddings
+            .map(emb => (0, embedding_util_1.extractEmbedding)(emb))
+            .filter(vector => vector.length > 0);
+        if (embeddings.length === 0) {
+            this.logger.error('retrieve: empty embeddings from Ollama', {
+                queriesCount: queriesToEmbed.length,
+            });
+            throw new Error('Embedding generation returned empty vectors');
+        }
+        const primaryEmbedding = new embedding_vo_1.Embedding(embeddings[0]);
         let results = [];
         const effectivenessLimit = (searchMode === 'entity' ? 6 : 4) * effectiveLimit;
-        if (useHybridSearch) {
-            let allSearchResults = await Promise.all(embeddings.map(emb => this.hybridSearch.search(collectionName, new embedding_vo_1.Embedding((0, embedding_util_1.extractEmbedding)(emb)), keywords, effectivenessLimit, {
+        if (shouldUseHybridSearch) {
+            let allSearchResults = await Promise.all(embeddings.map(emb => this.hybridSearch.search(collectionName, new embedding_vo_1.Embedding(emb), keywords, effectivenessLimit, {
                 searchMode,
                 minTextLength: MIN_CHUNK_TEXT_LENGTH,
                 originalQuery: query,
+                ...(metadataFilter ? { filter: metadataFilter } : {}),
                 ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
             })));
-            const isCompletelyEmpty = allSearchResults.every(arr => arr.length === 0);
+            const isCompletelyEmpty = allSearchResults.every(arr => !arr || arr.length === 0);
             if (isCompletelyEmpty) {
-                allSearchResults = await Promise.all(embeddings.map(emb => this.hybridSearch.search(collectionName, new embedding_vo_1.Embedding((0, embedding_util_1.extractEmbedding)(emb)), keywords, effectivenessLimit, {
+                allSearchResults = await Promise.all(embeddings.map(emb => this.hybridSearch.search(collectionName, new embedding_vo_1.Embedding(emb), keywords, effectivenessLimit, {
                     searchMode,
                     minTextLength: MIN_CHUNK_TEXT_LENGTH,
                     originalQuery: query,
+                    ...(metadataFilter ? { filter: metadataFilter } : {}),
                 })));
             }
             const validResults = allSearchResults.filter(Boolean);
@@ -479,8 +494,8 @@ let TextRagService = class TextRagService {
             if (uaStartIndex >= 0 && uaTranslations.length > 0 && collectionName) {
                 try {
                     const uaEmbeddings = embeddings.slice(uaStartIndex);
-                    const uaSearchResults = await Promise.all(uaEmbeddings.map(emb => this.qdrantService.search(collectionName, {
-                        vector: (0, embedding_util_1.extractEmbedding)(emb),
+                    const uaSearchResults = await Promise.all(uaEmbeddings.map(emb => this.vectorSearch.search(collectionName, {
+                        vector: emb,
                         limit: effectivenessLimit,
                         searchMode: 'wide',
                         score_threshold: null,
@@ -526,7 +541,8 @@ let TextRagService = class TextRagService {
         else {
             const vectorResults = await this.textRepository.findByEmbedding(primaryEmbedding, effectiveLimit * 3, {
                 ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
-                searchMode: entityQuery ? 'wide' : 'balanced',
+                searchMode: isEntityMode ? 'wide' : 'balanced',
+                ...(metadataFilter ? { filter: metadataFilter } : {}),
             });
             results = vectorResults.map(doc => ({
                 id: doc.id,
@@ -544,13 +560,14 @@ let TextRagService = class TextRagService {
             const avgTopScore = topScores.length
                 ? topScores.reduce((a, b) => a + b, 0) / topScores.length
                 : 0;
-            const entityKeywordMissing = entityQuery && keywords.length > 0 &&
+            const keywordMissing = isEntityMode && keywords.length > 0 &&
                 !results.slice(0, 3).some(r => keywords.some(kw => r.text.toLowerCase().includes(kw.toLowerCase())));
-            if (avgTopScore < 0.72 || entityKeywordMissing) {
+            if (avgTopScore < 0.72 || keywordMissing) {
                 const hybridFallback = await this.hybridSearch.search(collectionName, primaryEmbedding, keywords, effectiveLimit * 3, {
                     searchMode,
                     minTextLength: MIN_CHUNK_TEXT_LENGTH,
                     originalQuery: query,
+                    ...(metadataFilter ? { filter: metadataFilter } : {}),
                     ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
                 });
                 if (!hybridFallback)
@@ -560,9 +577,12 @@ let TextRagService = class TextRagService {
         }
         if (results.length === 0)
             return 'There is no relevant information in knowledge';
+        const entityCandidateLimit = searchMode === 'entity'
+            ? Math.max(effectiveLimit * 4, 24)
+            : effectiveLimit;
         if (useReranking && rerankStrategy !== 'none' && results.length > effectiveLimit && searchMode !== 'wide') {
             const reranked = await this.reranker.rerank(query, results, {
-                topK: effectiveLimit,
+                topK: entityCandidateLimit,
                 method: rerankStrategy === 'cross_encoder' ? 'listwise'
                     : rerankStrategy === 'llm_based' ? 'llm'
                         : 'hybrid',
@@ -572,10 +592,23 @@ let TextRagService = class TextRagService {
         const scoreFloor = (useReranking && rerankStrategy !== 'none') ? 0.0163 : 0.01;
         results = results.filter(r => r.score > scoreFloor);
         results = results.filter(r => r.level !== 0);
-        results = results.slice(0, effectiveLimit);
-        if (searchMode === 'wide' || searchMode === 'entity') {
+        if (searchMode === 'entity') {
             const nameTokenGroups = this.extractNameTokens(query);
             if (nameTokenGroups.length > 0) {
+                const matchScore = (text, groups) => {
+                    const lower = text.toLowerCase();
+                    const translitText = (0, transliteration_util_1.cyrillicToLatin)(lower);
+                    let score = 0;
+                    for (const variants of groups) {
+                        const matched = variants.some(v => {
+                            const vLower = v.toLowerCase();
+                            return lower.includes(vLower) || translitText.includes((0, transliteration_util_1.cyrillicToLatin)(vLower));
+                        });
+                        if (matched)
+                            score += 1;
+                    }
+                    return score;
+                };
                 const chunkMatches = (text, groups) => {
                     const lower = text.toLowerCase();
                     const translitText = (0, transliteration_util_1.cyrillicToLatin)(lower);
@@ -607,6 +640,12 @@ let TextRagService = class TextRagService {
                     });
                 }
                 if (filtered.length > 0) {
+                    filtered = filtered.sort((a, b) => {
+                        const byNameMatch = matchScore(b.text, nameTokenGroups) - matchScore(a.text, nameTokenGroups);
+                        if (byNameMatch !== 0)
+                            return byNameMatch;
+                        return (b.score ?? 0) - (a.score ?? 0);
+                    });
                     this.logger.log('EntityPostFilter', {
                         query,
                         groups: nameTokenGroups.map(g => g.slice(0, 4)),
@@ -625,6 +664,7 @@ let TextRagService = class TextRagService {
                 }
             }
         }
+        results = results.slice(0, effectiveLimit);
         const shouldCompress = useContextualCompression && searchMode !== 'entity';
         if (shouldCompress) {
             try {
@@ -638,6 +678,146 @@ let TextRagService = class TextRagService {
         }
         return results;
     }
+    extractFallbackKeywords(query) {
+        return [...new Set(query
+                .toLowerCase()
+                .replace(/[?!.,;:'"]/g, ' ')
+                .split(/\s+/)
+                .map(token => token.trim())
+                .filter(token => token.length > 2 && !KEYWORD_STOP_WORDS.has(token)))].slice(0, 15);
+    }
+    buildMetadataFilter(filters) {
+        if (!filters?.length)
+            return undefined;
+        const must = [];
+        const mustNot = [];
+        for (const filter of filters) {
+            if (!filter?.field)
+                continue;
+            if (filter.value === undefined || filter.value === null)
+                continue;
+            const key = filter.field;
+            const op = filter.operator ?? 'eq';
+            if (op === 'ne') {
+                mustNot.push({ key, match: { value: filter.value } });
+                continue;
+            }
+            if (op === 'in' && Array.isArray(filter.value)) {
+                const values = filter.value.filter(v => v !== undefined && v !== null);
+                if (!values.length)
+                    continue;
+                must.push({
+                    should: values.map(value => ({ key, match: { value } })),
+                });
+                continue;
+            }
+            if (op === 'gt' || op === 'gte' || op === 'lt' || op === 'lte') {
+                if (typeof filter.value !== 'number')
+                    continue;
+                must.push({
+                    key,
+                    range: {
+                        ...(op === 'gt' ? { gt: filter.value } : {}),
+                        ...(op === 'gte' ? { gte: filter.value } : {}),
+                        ...(op === 'lt' ? { lt: filter.value } : {}),
+                        ...(op === 'lte' ? { lte: filter.value } : {}),
+                    },
+                });
+                continue;
+            }
+            must.push({ key, match: { value: filter.value } });
+        }
+        if (must.length === 0 && mustNot.length === 0)
+            return undefined;
+        return {
+            ...(must.length > 0 ? { must } : {}),
+            ...(mustNot.length > 0 ? { must_not: mustNot } : {}),
+        };
+    }
+    normalizeCacheQuery(query) {
+        return query.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 600);
+    }
+    shouldUseAnswerCache(options) {
+        if (options?.useAnswerCache === false)
+            return false;
+        if (options?.sessionId)
+            return false;
+        if ((options?.conversationHistory?.length ?? 0) > 0)
+            return false;
+        if (options?.useConversationMemory)
+            return false;
+        return true;
+    }
+    getAnswerCacheKey(query, options) {
+        const payload = {
+            q: this.normalizeCacheQuery(query),
+            limit: options?.limit,
+            scoreThreshold: options?.scoreThreshold,
+            useHybridSearch: options?.useHybridSearch,
+            useReranking: options?.useReranking,
+            rerankStrategy: options?.rerankStrategy,
+            useQueryTransformation: options?.useQueryTransformation,
+            useContextualCompression: options?.useContextualCompression,
+            useKnowledgeGraph: options?.useKnowledgeGraph,
+            useCitationTracking: options?.useCitationTracking,
+            filters: options?.filters,
+            includeSources: options?.includeSources,
+            topP: options?.topP,
+            topK: options?.topK,
+            temperature: options?.temperature,
+            maxTokens: options?.maxTokens,
+        };
+        return `answer_cache:${JSON.stringify(payload)}`;
+    }
+    async getCachedAnswer(query, options) {
+        if (!this.shouldUseAnswerCache(options))
+            return null;
+        const key = this.getAnswerCacheKey(query, options);
+        try {
+            const cached = await this.redis.get(key);
+            if (!cached)
+                return null;
+            if (typeof cached === 'string') {
+                return JSON.parse(cached);
+            }
+            return cached;
+        }
+        catch (err) {
+            this.logger.warn('Answer cache get failed', { error: err?.message });
+            return null;
+        }
+    }
+    async setCachedAnswer(query, options, answer) {
+        if (!this.shouldUseAnswerCache(options))
+            return;
+        const key = this.getAnswerCacheKey(query, options);
+        try {
+            await this.redis.set(key, JSON.stringify(answer), { ex: ANSWER_CACHE_TTL_SEC });
+        }
+        catch (err) {
+            this.logger.warn('Answer cache set failed', { error: err?.message });
+        }
+    }
+    deduplicateContextDocs(docs, limit) {
+        const seen = new Set();
+        const deduped = [];
+        for (const doc of docs) {
+            const normalized = doc.text
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 260);
+            if (!normalized)
+                continue;
+            if (seen.has(normalized))
+                continue;
+            seen.add(normalized);
+            deduped.push(doc);
+            if (deduped.length >= limit)
+                break;
+        }
+        return deduped;
+    }
     async getAllDocuments() {
         const documents = await this.textRepository.findAll();
         return documents.map(doc => ({
@@ -648,6 +828,7 @@ let TextRagService = class TextRagService {
         }));
     }
     async prepareGenerationContext(query, options) {
+        const traceStartMs = Date.now();
         const classification = await this.classifyQuery(query);
         const p = classification.params;
         this.logger.log('QueryClassification', {
@@ -661,18 +842,19 @@ let TextRagService = class TextRagService {
             },
         });
         const retrieveOptions = {
-            limit: p.limit,
-            scoreThreshold: p.scoreThreshold,
-            useHybridSearch: p.useHybridSearch,
-            useReranking: p.useReranking,
-            rerankStrategy: p.rerankStrategy,
-            useQueryTransformation: p.useQueryTransformation,
-            useContextualCompression: p.useContextualCompression,
-            useConversationMemory: p.useConversationMemory,
+            limit: options?.limit ?? p.limit,
+            scoreThreshold: options?.scoreThreshold ?? p.scoreThreshold,
+            useHybridSearch: options?.useHybridSearch ?? p.useHybridSearch,
+            useReranking: options?.useReranking ?? p.useReranking,
+            rerankStrategy: options?.rerankStrategy ?? p.rerankStrategy,
+            useQueryTransformation: options?.useQueryTransformation ?? p.useQueryTransformation,
+            useContextualCompression: options?.useContextualCompression ?? p.useContextualCompression,
+            useConversationMemory: options?.useConversationMemory ?? p.useConversationMemory,
             filters: options?.filters,
             sessionId: options?.sessionId,
             _searchMode: p.searchMode,
         };
+        const retrieveStartMs = Date.now();
         const [rawRetrieved, linksResult] = await Promise.all([
             this.retrieve(query, undefined, retrieveOptions),
             this.linkService
@@ -686,6 +868,7 @@ let TextRagService = class TextRagService {
         if (typeof rawRetrieved === 'string') {
             return { earlyExit: rawRetrieved };
         }
+        const retrieveDurationMs = Date.now() - retrieveStartMs;
         const effectiveThreshold = classification.type === 'factual'
             ? Math.min(p.scoreThreshold, FACTUAL_SCORE_THRESHOLD_CAP)
             : p.scoreThreshold;
@@ -710,11 +893,9 @@ let TextRagService = class TextRagService {
         }
         const useKG = options?.useKnowledgeGraph ?? p.useKnowledgeGraph;
         const kgContext = useKG ? await this.queryKnowledgeGraph(query) : undefined;
-        const context = retrieved
-            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-            .slice(0, classification.type === 'entity' ? 10 : 7)
-            .map(doc => doc.text)
-            .join('\n\n');
+        const contextLimit = classification.type === 'entity' ? 8 : 7;
+        const retrievedForPrompt = this.deduplicateContextDocs([...retrieved].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)), contextLimit);
+        const context = await this.ragContextFormatting.formatRetrievedDocuments(retrievedForPrompt.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)));
         let prompt = this.buildPrompt(classification.type, context, query);
         if (kgContext) {
             prompt +=
@@ -728,28 +909,52 @@ let TextRagService = class TextRagService {
             prompt += `\n\n<conversation_history>\n${historyBlock}\n</conversation_history>`;
         }
         if (classification.type !== 'entity') {
-            prompt += `\n\n<linksResult>\n${linksResult.block}\n</linksResult>
+            prompt += `
+        \n\n<linksResult>\n${linksResult.block}\n</linksResult>
 
-<links_usage_rules>
-  - Використовуй linksResult лише якщо хоча б одне посилання прямо відповідає на запит
-  - Якщо посилання лише дотично пов'язані — НЕ використовуй їх
-  - Не вставляй посилання, якщо відповідь і так повна без них
-  - Максимум 1–3 посилання
-</links_usage_rules>`;
+        <links_usage_rules>
+          - Використовуй linksResult лише якщо хоча б одне посилання прямо відповідає на запит
+          - Якщо посилання лише дотично пов'язані — НЕ використовуй їх
+          - Не вставляй посилання, якщо відповідь і так повна без них
+          - Максимум 1–3 посилання
+        </links_usage_rules>`;
         }
         prompt += `\n\n<question>${query}</question>\n\nВідповідь (структурована, на основі контексту):`;
+        this.logger.log('RagTrace_PrepareContext', {
+            query: query.slice(0, 80),
+            retrieveDurationMs,
+            totalPrepareMs: Date.now() - traceStartMs,
+            diagnostics: {
+                effectiveLimit: retrieveOptions.limit ?? p.limit,
+                preFilterCount: rawRetrieved.length,
+                postFilterCount: postFilterResults.length,
+                finalCount: retrieved.length,
+                searchMode: p.searchMode,
+            },
+        });
+        const generationParams = {
+            temperature: options?.temperature ?? p.temperature,
+            topP: options?.topP ?? p.topP,
+            topK: options?.topK ?? p.topK,
+            maxTokens: options?.maxTokens ?? p.maxTokens,
+            repeatPenalty: p.repeatPenalty,
+            seed: p.seed,
+        };
         return {
             classification,
             p,
             retrieved,
             prompt,
-            generationParams: {
-                temperature: p.temperature,
-                topP: p.topP,
-                topK: p.topK,
-                maxTokens: p.maxTokens,
-                repeatPenalty: p.repeatPenalty,
-                seed: p.seed,
+            generationParams,
+            retrievalDiagnostics: {
+                effectiveLimit: retrieveOptions.limit ?? p.limit,
+                preFilterCount: rawRetrieved.length,
+                postFilterCount: postFilterResults.length,
+                finalCount: retrieved.length,
+                searchMode: p.searchMode,
+                hybridEnabled: retrieveOptions.useHybridSearch ?? p.useHybridSearch,
+                rerankEnabled: retrieveOptions.useReranking ?? p.useReranking,
+                contextualCompressionEnabled: retrieveOptions.useContextualCompression ?? p.useContextualCompression,
             },
         };
     }
@@ -773,7 +978,7 @@ let TextRagService = class TextRagService {
     }
     persistSessionTurn(sessionId, query, answer) {
         setImmediate(() => {
-            this.ollama
+            this.embeddingPort
                 .embed(query)
                 .then(emb => this.conversationRepository.addTurn(sessionId, query, answer, (0, embedding_util_1.extractEmbedding)(emb)))
                 .catch(err => this.logger.warn('Session embed failed', { error: err?.message }));
@@ -795,15 +1000,15 @@ let TextRagService = class TextRagService {
       ЗАВДАННЯ:
 
       1. Проаналізуй ВЕСЬ контекст
-      2. Збери ВСЮ інформацію, що стосується сутності (людини / об'єкта)
-      3. ОБ'ЄДНАЙ її в цілісне узагальнення
-      4. Структуруй відповідь за змістом (ролі, дії, процеси, деталі тощо)
+      2. Візьми інформацію, яка прямо відповідає на поточне питання, і додай важливий контекст
+      3. Відкинь тільки явно зайві біографічні/довідкові деталі, що не стосуються питання
+      4. ОБ'ЄДНАЙ релевантне в цілісне, розгорнуте узагальнення
 
       ФОРМАТ ВІДПОВІДІ:
 
-      - короткий вступ (хто/що це)
-      - далі логічні підрозділи (сам обери структуру)
-      - під кожним — узагальнена інформація
+      - 1 короткий вступ (хто/що це)
+      - далі 4-6 змістовних пунктів по суті питання
+      - додавай важливі деталі та приклади з контексту, якщо вони допомагають зрозуміти відповідь
 
       ВАЖЛИВО:
 
@@ -935,13 +1140,35 @@ let TextRagService = class TextRagService {
         catch (err) {
             return { answer: err?.message ?? 'Prompt injection detected' };
         }
+        const cached = await this.getCachedAnswer(query, options);
+        if (cached) {
+            const sanitizedCachedAnswer = this.sanitizeModelOutput(cached.formattedAnswer ?? cached.answer ?? '');
+            this.logger.log('RagTrace_AnswerCache', {
+                query: query.slice(0, 80),
+                hit: true,
+            });
+            const cachedWithFlag = {
+                ...cached,
+                answer: sanitizedCachedAnswer,
+                formattedAnswer: sanitizedCachedAnswer,
+                retrievalDiagnostics: {
+                    ...(cached.retrievalDiagnostics ?? {}),
+                    cacheHit: true,
+                },
+            };
+            if (options?.includeRetrievalDiagnostics)
+                return cachedWithFlag;
+            const { retrievalDiagnostics, ...withoutDiagnostics } = cachedWithFlag;
+            return withoutDiagnostics;
+        }
         const ctx = await this.prepareGenerationContext(query, options);
         if ('earlyExit' in ctx) {
             return { answer: ctx.earlyExit };
         }
-        const { classification, p, retrieved, prompt, generationParams } = ctx;
+        const { classification, p, retrieved, prompt, generationParams, retrievalDiagnostics } = ctx;
         const { temperature, topP, topK, maxTokens, repeatPenalty, seed } = generationParams;
-        const answer = await this.ollama.getRagResponseByPrompt(prompt, {
+        const generationStartMs = Date.now();
+        const rawAnswer = await this.chatLlmPort.complete(prompt, {
             temperature,
             topP,
             topK,
@@ -949,6 +1176,8 @@ let TextRagService = class TextRagService {
             repeatPenalty,
             seed,
         });
+        const answer = this.sanitizeModelOutput(rawAnswer);
+        const generationDurationMs = Date.now() - generationStartMs;
         const useCitations = options?.useCitationTracking ?? p.useCitationTracking;
         let citations = [];
         let formattedAnswer = answer;
@@ -958,11 +1187,11 @@ let TextRagService = class TextRagService {
             formattedAnswer = tracked.formattedAnswer;
         }
         if (options?.sessionId) {
-            const embedding = await this.ollama.embed(query);
+            const embedding = await this.embeddingPort.embed(query);
             await this.conversationRepository.addTurn(options.sessionId, query, answer, (0, embedding_util_1.extractEmbedding)(embedding));
         }
         const topScore = retrieved[0]?.score;
-        return {
+        const response = {
             answer: formattedAnswer,
             formattedAnswer,
             citations,
@@ -972,6 +1201,12 @@ let TextRagService = class TextRagService {
             queryConfidence: classification.confidence,
             generationParams,
             conversationContext: !!options?.sessionId,
+            ...(options?.includeRetrievalDiagnostics && {
+                retrievalDiagnostics: {
+                    ...retrievalDiagnostics,
+                    cacheHit: false,
+                },
+            }),
             ...(options?.includeSources && {
                 sources: retrieved.map(doc => ({
                     id: doc.id,
@@ -981,33 +1216,85 @@ let TextRagService = class TextRagService {
                 })),
             }),
         };
+        await this.setCachedAnswer(query, options, response);
+        this.logger.log('RagTrace_GenerateAnswer', {
+            query: query.slice(0, 80),
+            generationDurationMs,
+            answerChars: answer.length,
+            citations: citations.length,
+            relevantChunks: retrieved.length,
+        });
+        return response;
     }
     async *streamableGenerateAnswer(query, options) {
         try {
             prompt_injection_guard_1.PromptInjectionGuard.assertSafe(query);
         }
         catch (err) {
-            yield { event: 'error', error: err?.message ?? 'Prompt injection detected' };
+            yield { event: 'error', error: 'Prompt injection detected' };
             return;
         }
-        const ctx = await this.prepareGenerationContext(query, options);
+        const cached = await this.getCachedAnswer(query, options);
+        if (cached) {
+            const sanitizedCachedAnswer = this.sanitizeModelOutput(cached.formattedAnswer ?? cached.answer ?? '');
+            this.logger.log('RagTrace_Stream_AnswerCache', { query: query.slice(0, 80), hit: true });
+            const cachedWithFlag = {
+                ...cached,
+                answer: sanitizedCachedAnswer,
+                formattedAnswer: sanitizedCachedAnswer,
+                retrievalDiagnostics: { ...(cached.retrievalDiagnostics ?? {}), cacheHit: true },
+            };
+            yield {
+                event: 'metadata',
+                metadata: {
+                    relevantChunks: cachedWithFlag.relevantChunks,
+                    confidence: cachedWithFlag.confidence,
+                    queryType: cachedWithFlag.queryType,
+                    queryConfidence: cachedWithFlag.queryConfidence,
+                    generationParams: cachedWithFlag.generationParams,
+                    conversationContext: cachedWithFlag.conversationContext,
+                    ...(options?.includeRetrievalDiagnostics && {
+                        retrievalDiagnostics: cachedWithFlag.retrievalDiagnostics,
+                    }),
+                },
+            };
+            yield { event: 'token', token: cachedWithFlag.formattedAnswer ?? cachedWithFlag.answer };
+            yield { event: 'done', metadata: { citations: cachedWithFlag.citations ?? [], relevantChunks: cachedWithFlag.relevantChunks ?? 0 } };
+            return;
+        }
+        let ctx = { earlyExit: 'Prepare generation context failed' };
+        try {
+            ctx = await this.prepareGenerationContext(query, options);
+        }
+        catch (err) {
+            this.logger.error('streamableGenerateAnswer: prepareGenerationContext failed', {
+                error: err?.message,
+            });
+            yield { event: 'error', error: 'Prepare generation context failed' };
+            return;
+        }
         if ('earlyExit' in ctx) {
             yield { event: 'metadata', metadata: { relevantChunks: 0, citations: [] } };
             yield { event: 'token', token: ctx.earlyExit };
             yield { event: 'done', metadata: { relevantChunks: 0, citations: [] } };
             return;
         }
-        const { classification, p, retrieved, prompt, generationParams } = ctx;
+        const { classification, p, retrieved, prompt, generationParams, retrievalDiagnostics } = ctx;
         const { temperature, topP, topK, maxTokens, repeatPenalty, seed } = generationParams;
+        const relevantChunks = retrieved.length;
+        const confidence = retrieved[0]?.score;
         yield {
             event: 'metadata',
             metadata: {
-                relevantChunks: retrieved.length,
-                confidence: retrieved[0]?.score,
+                relevantChunks,
+                confidence,
                 queryType: classification.type,
                 queryConfidence: classification.confidence,
                 generationParams,
                 conversationContext: !!options?.sessionId,
+                ...(options?.includeRetrievalDiagnostics && {
+                    retrievalDiagnostics: { ...retrievalDiagnostics, cacheHit: false },
+                }),
                 ...(options?.includeSources && {
                     sources: retrieved.map(doc => ({
                         id: doc.id,
@@ -1018,9 +1305,10 @@ let TextRagService = class TextRagService {
                 }),
             },
         };
-        let fullAnswer = '';
+        let rawFullAnswer = '';
+        let streamedSanitizedAnswer = '';
         try {
-            for await (const token of this.ollama.getRagResponseByPromptStream(prompt, {
+            for await (const token of this.chatLlmPort.stream(prompt, {
                 temperature,
                 topP,
                 topK,
@@ -1028,23 +1316,63 @@ let TextRagService = class TextRagService {
                 repeatPenalty,
                 seed,
             })) {
-                fullAnswer += token;
-                yield { event: 'token', token };
+                rawFullAnswer += token;
+                const sanitizedNow = this.sanitizeModelOutput(rawFullAnswer);
+                const delta = sanitizedNow.slice(streamedSanitizedAnswer.length);
+                if (delta) {
+                    streamedSanitizedAnswer = sanitizedNow;
+                    yield { event: 'token', token: delta };
+                }
             }
         }
         catch (err) {
-            yield { event: 'error', error: err?.message ?? 'LLM streaming failed' };
+            yield { event: 'error', error: 'LLM streaming failed' };
             return;
         }
-        this.runConfidenceCheck(query, fullAnswer, retrieved).catch(() => { });
-        const useCitations = options?.useCitationTracking ?? p.useCitationTracking;
-        const citations = useCitations
-            ? this.trackCitations(fullAnswer, retrieved).citations
-            : [];
-        if (options?.sessionId) {
-            this.persistSessionTurn(options.sessionId, query, fullAnswer);
+        let finalAnswer = streamedSanitizedAnswer;
+        try {
+            const verification = await this.confidencePort.verify(finalAnswer, retrieved.map(r => r.text));
+            this.logger.log('Stream_Confidence', {
+                score: verification.confidence.score,
+                tier: verification.confidence.tier,
+                grounded: verification.grounded,
+                verdict: verification.llmVerdict,
+            });
+            if (!verification.grounded && verification.llmVerdict === 'NO') {
+                finalAnswer = 'Немає релевантної відповіді';
+                yield { event: 'correction', correctedAnswer: finalAnswer, reason: 'hallucination' };
+            }
         }
-        yield { event: 'done', metadata: { citations, relevantChunks: retrieved.length } };
+        catch (err) {
+            this.logger.warn('Stream_Confidence: check failed', { error: err?.message });
+        }
+        let citations = [];
+        try {
+            const useCitations = options?.useCitationTracking ?? p.useCitationTracking;
+            citations = useCitations
+                ? this.trackCitations(finalAnswer, retrieved).citations
+                : [];
+        }
+        catch (err) {
+            yield { event: 'error', error: 'Citation tracking failed' };
+            return;
+        }
+        if (options?.sessionId) {
+            this.persistSessionTurn(options.sessionId, query, finalAnswer);
+        }
+        const responseForCache = {
+            answer: finalAnswer,
+            formattedAnswer: finalAnswer,
+            citations,
+            relevantChunks,
+            confidence,
+            queryType: classification.type,
+            queryConfidence: classification.confidence,
+            generationParams,
+            conversationContext: !!options?.sessionId,
+        };
+        await this.setCachedAnswer(query, options, responseForCache);
+        yield { event: 'done', metadata: { citations, relevantChunks } };
     }
     async deleteById(id) {
         await this.textRepository.deleteById(id);
@@ -1078,6 +1406,15 @@ let TextRagService = class TextRagService {
         }
         return { citations, formattedAnswer };
     }
+    sanitizeModelOutput(answer) {
+        return answer
+            .replace(/<linksResult>[\s\S]*?<\/linksResult>/gi, '')
+            .replace(/<linkResults>[\s\S]*?<\/linkResults>/gi, '')
+            .replace(/<links_usage_rules>[\s\S]*?<\/links_usage_rules>/gi, '')
+            .replace(/<\/?(linksResult|linkResults|links_usage_rules)>/gi, '')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    }
     findSimilarContent(haystack, needle) {
         const needleWords = needle.toLowerCase().split(/\s+/).filter(w => w.length > 2);
         if (needleWords.length === 0)
@@ -1091,10 +1428,9 @@ let TextRagService = class TextRagService {
         const parentTexts = new Map();
         if (parentIds.length > 0) {
             try {
-                const ragConfig = this.configService.get(rag_config_1.RAG_CONFIG);
-                const collectionName = ragConfig?.textRagCollectionName;
+                const { textRagCollectionName: collectionName } = this.ragSettings.get();
                 if (collectionName) {
-                    const parentPoints = await this.qdrantService.getPoints(collectionName, parentIds);
+                    const parentPoints = await this.vectorSearch.getPoints(collectionName, parentIds);
                     for (const p of parentPoints) {
                         parentTexts.set(p.id.toString(), p.payload?.text ?? '');
                     }
@@ -1165,7 +1501,7 @@ let TextRagService = class TextRagService {
       Respond with ONLY valid JSON, no markdown:
       {"entities":[{"name":"...","type":"..."}],"relations":[{"from":"...","relation":"...","to":"..."}]}`;
         try {
-            const response = await this.ollama.getRagResponseByPrompt(prompt, { temperature: 0, maxTokens: 800 });
+            const response = await this.chatLlmPort.complete(prompt, { temperature: 0, maxTokens: 800 });
             const clean = response.replace(/```(?:json)?/g, '').trim();
             const jsonMatch = clean.match(/\{[\s\S]*\}/);
             if (!jsonMatch)
@@ -1247,15 +1583,18 @@ let TextRagService = class TextRagService {
 exports.TextRagService = TextRagService;
 exports.TextRagService = TextRagService = __decorate([
     (0, common_1.Injectable)(),
-    __param(3, (0, common_1.Inject)('ITextDocumentRepository')),
-    __param(4, (0, common_1.Inject)('IConversationSessionRepository')),
-    __param(5, (0, common_1.Inject)('IKnowledgeGraphPort')),
-    __param(6, (0, common_1.Inject)('LoggerPort')),
-    __param(7, (0, common_1.Inject)('IConfidencePort')),
-    __param(9, (0, common_1.Inject)('REDIS_CLIENT')),
-    __metadata("design:paramtypes", [config_1.ConfigService,
-        ollama_service_1.OllamaService,
-        rag_qdrant_service_1.RagQdrantService, Object, Object, Object, Object, Object, link_service_1.LinkService,
-        redis_1.Redis])
+    __param(0, (0, common_1.Inject)('ITextVectorSearchPort')),
+    __param(1, (0, common_1.Inject)('IRagSettingsPort')),
+    __param(2, (0, common_1.Inject)('ITextDocumentRepository')),
+    __param(3, (0, common_1.Inject)('IConversationSessionRepository')),
+    __param(4, (0, common_1.Inject)('IKnowledgeGraphPort')),
+    __param(5, (0, common_1.Inject)('LoggerPort')),
+    __param(6, (0, common_1.Inject)('IConfidencePort')),
+    __param(7, (0, common_1.Inject)('IEmbeddingPort')),
+    __param(8, (0, common_1.Inject)('IChatLlmPort')),
+    __param(10, (0, common_1.Inject)('IRagContextFormattingPort')),
+    __param(11, (0, common_1.Inject)('REDIS_CLIENT')),
+    __param(12, (0, common_1.Inject)('CachePort')),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, link_service_1.LinkService, Object, redis_1.Redis, Object])
 ], TextRagService);
 //# sourceMappingURL=text-rag.service.js.map

@@ -14,17 +14,15 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ImageRagService = void 0;
 const common_1 = require("@nestjs/common");
-const config_1 = require("@nestjs/config");
 const uuid_1 = require("uuid");
 const image_document_entity_1 = require("../../domain/entities/image-document.entity");
 const embedding_vo_1 = require("../../domain/value-objects/embedding.vo");
 const similarity_score_vo_1 = require("../../domain/value-objects/similarity-score.vo");
 const embedding_util_1 = require("../utils/embedding.util");
 const text_query_util_1 = require("../utils/text-query.util");
-const rag_config_1 = require("../../infrastructure/config/rag-config");
 let ImageRagService = class ImageRagService {
-    constructor(configService, embeddingPort, chatLlm, storage, imageRepository, logger) {
-        this.configService = configService;
+    constructor(ragSettings, embeddingPort, chatLlm, storage, imageRepository, logger) {
+        this.ragSettings = ragSettings;
         this.embeddingPort = embeddingPort;
         this.chatLlm = chatLlm;
         this.storage = storage;
@@ -32,8 +30,7 @@ let ImageRagService = class ImageRagService {
         this.logger = logger;
     }
     async uploadImages(files) {
-        const ragConfig = this.configService.get(rag_config_1.RAG_CONFIG);
-        const embedModel = ragConfig?.ollamaEmbedModelText || 'nomic-embed-text';
+        const { ollamaEmbedModelText: embedModel } = this.ragSettings.get();
         const createdAt = new Date();
         const documents = await Promise.all(files.map(async (file) => {
             const id = (0, uuid_1.v4)();
@@ -63,8 +60,8 @@ let ImageRagService = class ImageRagService {
         return { deletedImageId: id };
     }
     async getImagesByKeyword(query, limit = 10) {
-        const ragConfig = this.configService.get(rag_config_1.RAG_CONFIG);
-        const minScore = new similarity_score_vo_1.SimilarityScore(ragConfig?.imageRagMinScoreThreshold ?? 0.55);
+        const { imageRagMinScoreThreshold } = this.ragSettings.get();
+        const minScore = new similarity_score_vo_1.SimilarityScore(imageRagMinScoreThreshold);
         const embeddingRaw = await this.embeddingPort.embed(query);
         const embedding = (0, embedding_util_1.extractEmbedding)(embeddingRaw);
         if (!embedding)
@@ -132,11 +129,12 @@ let ImageRagService = class ImageRagService {
 exports.ImageRagService = ImageRagService;
 exports.ImageRagService = ImageRagService = __decorate([
     (0, common_1.Injectable)(),
+    __param(0, (0, common_1.Inject)('IRagSettingsPort')),
     __param(1, (0, common_1.Inject)('IEmbeddingPort')),
     __param(2, (0, common_1.Inject)('IChatLlmPort')),
     __param(3, (0, common_1.Inject)('IStoragePort')),
     __param(4, (0, common_1.Inject)('IImageDocumentRepository')),
     __param(5, (0, common_1.Inject)('LoggerPort')),
-    __metadata("design:paramtypes", [config_1.ConfigService, Object, Object, Object, Object, Object])
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object])
 ], ImageRagService);
 //# sourceMappingURL=image-rag.service.js.map

@@ -21,6 +21,10 @@ let OllamaChatAdapter = class OllamaChatAdapter {
             temperature: options?.temperature,
             topP: options?.topP,
             topK: options?.topK,
+            maxTokens: options?.maxTokens,
+            repeatPenalty: options?.repeatPenalty,
+            seed: options?.seed,
+            stop: options?.stop,
         });
     }
     async describeImage(imageBuffer, mimeType) {
@@ -31,6 +35,17 @@ let OllamaChatAdapter = class OllamaChatAdapter {
     }
     async extractKeywords(text) {
         return this.ollama.extractKeywords(text);
+    }
+    stream(prompt, options) {
+        return this.ollama.getRagResponseByPromptStream(prompt, {
+            temperature: options?.temperature,
+            topP: options?.topP,
+            topK: options?.topK,
+            maxTokens: options?.maxTokens,
+            repeatPenalty: options?.repeatPenalty,
+            seed: options?.seed,
+            stop: options?.stop,
+        });
     }
 };
 exports.OllamaChatAdapter = OllamaChatAdapter;

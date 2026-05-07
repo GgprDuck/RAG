@@ -8,8 +8,8 @@ import { ConsoleLoggerAdapter } from 'src/rag/shared/application/ports/console.l
   providers: [
     Neo4jKnowledgeGraphService,
     {
-      provide: 'IKnowledgeGraphService',
-      useClass: Neo4jKnowledgeGraphService,
+      provide: 'IKnowledgeGraphPort',
+      useExisting: Neo4jKnowledgeGraphService,
     },
     { 
       provide: 'LoggerPort',
@@ -17,7 +17,7 @@ import { ConsoleLoggerAdapter } from 'src/rag/shared/application/ports/console.l
     },
   ],
   exports: [
-    'IKnowledgeGraphService',
+    'IKnowledgeGraphPort',
     Neo4jKnowledgeGraphService,
   ],
 })

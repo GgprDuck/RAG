@@ -5,10 +5,14 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var AllExceptionsFilter_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AllExceptionsFilter = void 0;
 const common_1 = require("@nestjs/common");
-let AllExceptionsFilter = class AllExceptionsFilter {
+let AllExceptionsFilter = AllExceptionsFilter_1 = class AllExceptionsFilter {
+    constructor() {
+        this.logger = new common_1.Logger(AllExceptionsFilter_1.name);
+    }
     catch(exception, host) {
         const ctx = host.switchToHttp();
         const response = ctx.getResponse();
@@ -44,15 +48,11 @@ let AllExceptionsFilter = class AllExceptionsFilter {
                 ? request.url
                 : 'UNKNOWN';
         if (status === 500) {
-            console.error('[UNHANDLED ERROR]', {
-                timestamp: new Date().toISOString(),
-                path: url,
-                method,
-                exception,
-            });
+            const trace = exception instanceof Error ? exception.stack : JSON.stringify(exception);
+            this.logger.error(`[UNHANDLED ERROR] ${method} ${url} at ${new Date().toISOString()}`, trace);
         }
         else {
-            console.warn(`[${status}] ${method} ${url}: ${message}`);
+            this.logger.warn(`[${status}] ${method} ${url}: ${message}`);
         }
         if (typeof response === 'object' &&
             response !== null &&
@@ -69,7 +69,7 @@ let AllExceptionsFilter = class AllExceptionsFilter {
     }
 };
 exports.AllExceptionsFilter = AllExceptionsFilter;
-exports.AllExceptionsFilter = AllExceptionsFilter = __decorate([
+exports.AllExceptionsFilter = AllExceptionsFilter = AllExceptionsFilter_1 = __decorate([
     (0, common_1.Catch)()
 ], AllExceptionsFilter);
 //# sourceMappingURL=all-exeption.filter.js.map

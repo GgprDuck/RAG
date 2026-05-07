@@ -1,4 +1,5 @@
-import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+import { IChatLlmPort } from 'src/rag/domain/ports/chat-llm.port';
+import { IEmbeddingPort } from 'src/rag/domain/ports/embedding.port';
 
 export interface RerankedResult<T> {
   id?: string;
@@ -17,7 +18,10 @@ export interface RerankableItem {
 }
 
 export class Reranker {
-  constructor(private readonly ollamaService: OllamaService) {}
+  constructor(
+    private readonly chatLlm: IChatLlmPort,
+    private readonly embedding: IEmbeddingPort,
+  ) {}
 
   async rerank<T extends RerankableItem>(
     query: string,
@@ -81,7 +85,7 @@ export class Reranker {
       `Array:`;
 
     try {
-      const response = await this.ollamaService.getRagResponseByPrompt(prompt, {
+      const response = await this.chatLlm.complete(prompt, {
         temperature: 0,
         maxTokens: 120,
       });
@@ -142,7 +146,7 @@ export class Reranker {
             `Query: "${query}"\n\nText: "${textSample}"\n\n` +
             `Respond with ONLY a single integer 0-10.`;
           try {
-            const response = await this.ollamaService.getRagResponseByPrompt(prompt);
+            const response = await this.chatLlm.complete(prompt);
             const score = parseFloat(response.trim()) / 10;
             return {
               item: result,
@@ -169,14 +173,14 @@ export class Reranker {
     query: string,
     results: T[],
   ): Promise<RerankedResult<T>[]> {
-    const queryEmbedding = await this.ollamaService.embed(query);
+    const queryEmbedding = await this.embedding.embed(query);
 
     const similarities = await Promise.all(
       results.map(async (r) => {
         if (r.vector?.length && queryEmbedding) {
           return this.cosineSimilarity(queryEmbedding, r.vector);
         }
-        const emb = await this.ollamaService.embed(r.text.slice(0, 400));
+        const emb = await this.embedding.embed(r.text.slice(0, 400));
         return emb && queryEmbedding ? this.cosineSimilarity(queryEmbedding, emb) : 0;
       }),
     );

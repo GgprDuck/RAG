@@ -50,7 +50,7 @@ function latinToCyrillicBestEffort(text) {
     let r = text.toLowerCase();
     for (const [re, cyr] of steps)
         r = r.replace(re, cyr);
-    return r;
+    return r.replace(/[a-z]/g, '');
 }
 function generateNameVariants(token) {
     const clean = token.toLowerCase().trim()
@@ -150,19 +150,8 @@ const NON_PERSON_CONTEXT = new Set([
     'origin', 'history', 'meaning', 'founded', 'заснування',
     'onix',
 ]);
-function isEntityQuery(query) {
-    const trimmed = query.trim();
-    if (trimmed.length > 80)
-        return false;
-    const tokens = trimmed.split(/\s+/);
-    if (tokens.length > 5)
-        return false;
-    const lowerTokens = tokens.map(t => t.toLowerCase().replace(/[?!.,;:]/g, ''));
-    const hasNonPersonContext = lowerTokens.some(t => NON_PERSON_CONTEXT.has(t));
-    if (hasNonPersonContext)
-        return false;
-    const nameTokens = tokens.filter(t => /^[А-ЯІЇЄҐA-Z]/u.test(t) && !QUESTION_STOP_WORDS.has(t.toLowerCase()));
-    return nameTokens.length >= 1;
+function isEntityQuery(_query) {
+    return false;
 }
 function extractQueryNameVariants(query) {
     const tokens = query.split(/\s+/).filter(t => /^[А-ЯІЇЄҐA-Z]/u.test(t) && t.length >= 2);

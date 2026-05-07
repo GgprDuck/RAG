@@ -1,4 +1,4 @@
-import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+import { IEmbeddingPort } from "../../domain/ports/embedding.port";
 export interface ChunkMetadata {
     chunkId: string;
     parentId?: string;
@@ -15,7 +15,7 @@ export interface SemanticChunk {
     metadata: ChunkMetadata;
 }
 export declare function splitIntoSentences(text: string): string[];
-export declare function semanticChunking(text: string, ollamaService: OllamaService, options?: {
+export declare function semanticChunking(text: string, embedding: IEmbeddingPort, options?: {
     minChunkSize?: number;
     maxChunkSize?: number;
     similarityThreshold?: number;

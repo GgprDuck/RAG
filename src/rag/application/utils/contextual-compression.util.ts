@@ -1,4 +1,5 @@
-import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+import { IChatLlmPort } from 'src/rag/domain/ports/chat-llm.port';
+import { IEmbeddingPort } from 'src/rag/domain/ports/embedding.port';
 
 export interface CompressedContext {
   original: string;
@@ -8,7 +9,10 @@ export interface CompressedContext {
 }
 
 export class ContextualCompressor {
-  constructor(private readonly ollamaService: OllamaService) {}
+  constructor(
+    private readonly embedding: IEmbeddingPort,
+    private readonly chatLlm: IChatLlmPort,
+  ) {}
 
   async compressContext(
     query: string,
@@ -75,8 +79,8 @@ export class ContextualCompressor {
       .map((x) => x.s);
 
     const [queryEmbedding, ...candEmbeddings] = await Promise.all([
-      this.ollamaService.embed(query),
-      ...prescored.map((s) => this.ollamaService.embed(s.trim())),
+      this.embedding.embed(query),
+      ...prescored.map((s) => this.embedding.embed(s.trim())),
     ]);
 
     const reranked = prescored
@@ -125,7 +129,7 @@ export class ContextualCompressor {
 
       Relevant summary:`;
 
-    const compressed = await this.ollamaService.getRagResponseByPrompt(prompt);
+    const compressed = await this.chatLlm.complete(prompt);
 
     return {
       original: text,

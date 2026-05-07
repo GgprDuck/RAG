@@ -1,0 +1,50 @@
+---
+description: src/rag/application/**/*
+alwaysApply: false
+---
+## Queries
+- Must be immutable
+- No side effects
+
+---
+
+## Handlers
+- One public method: execute()
+- One handler per use case
+- Must use DI via Port tokens
+- No framework types (Request, Response)
+- No infrastructure types (Prisma, SDKs)
+
+---
+
+## Services
+- Orchestration only
+- No business logic
+- Use only Ports
+
+---
+
+## Data
+- Return DTOs only
+- Never return domain entities
+
+---
+
+## Dependencies
+Allowed:
+- Ports (interfaces)
+- DTOs
+- Commands / Queries
+
+Forbidden:
+- Prisma / DB clients
+- External SDKs
+- NestJS Request/Response
+
+---
+
+## Anti-Patterns
+- Mixing command + query
+- Business logic in handlers
+- Direct infra usage
+- Framework decorators in commands/queries

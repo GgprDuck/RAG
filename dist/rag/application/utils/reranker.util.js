@@ -2,8 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Reranker = void 0;
 class Reranker {
-    constructor(ollamaService) {
-        this.ollamaService = ollamaService;
+    constructor(chatLlm, embedding) {
+        this.chatLlm = chatLlm;
+        this.embedding = embedding;
     }
     async rerank(query, results, options = {}) {
         const { topK = results.length, method = 'hybrid' } = options;
@@ -50,7 +51,7 @@ class Reranker {
             `Example: [3,1,5,2,4]\n` +
             `Array:`;
         try {
-            const response = await this.ollamaService.getRagResponseByPrompt(prompt, {
+            const response = await this.chatLlm.complete(prompt, {
                 temperature: 0,
                 maxTokens: 120,
             });
@@ -101,7 +102,7 @@ class Reranker {
                     `Query: "${query}"\n\nText: "${textSample}"\n\n` +
                     `Respond with ONLY a single integer 0-10.`;
                 try {
-                    const response = await this.ollamaService.getRagResponseByPrompt(prompt);
+                    const response = await this.chatLlm.complete(prompt);
                     const score = parseFloat(response.trim()) / 10;
                     return {
                         item: result,
@@ -124,12 +125,12 @@ class Reranker {
         return output;
     }
     async embeddingRerank(query, results) {
-        const queryEmbedding = await this.ollamaService.embed(query);
+        const queryEmbedding = await this.embedding.embed(query);
         const similarities = await Promise.all(results.map(async (r) => {
             if (r.vector?.length && queryEmbedding) {
                 return this.cosineSimilarity(queryEmbedding, r.vector);
             }
-            const emb = await this.ollamaService.embed(r.text.slice(0, 400));
+            const emb = await this.embedding.embed(r.text.slice(0, 400));
             return emb && queryEmbedding ? this.cosineSimilarity(queryEmbedding, emb) : 0;
         }));
         return results.map((result, idx) => ({

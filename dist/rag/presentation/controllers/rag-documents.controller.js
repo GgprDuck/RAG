@@ -16,7 +16,7 @@ exports.RagDocumentsController = void 0;
 const common_1 = require("@nestjs/common");
 const platform_express_1 = require("@nestjs/platform-express");
 const ask_question_command_1 = require("../../application/commands/ask-question.command");
-const ask_question_handler_1 = require("../../application/handlers/ask-question.handler");
+const ask_question_stream_command_1 = require("../../application/commands/ask-question-stream.command");
 const upload_knowledge_command_1 = require("../../application/commands/upload-knowledge.command");
 const delete_document_command_1 = require("../../application/commands/delete-document.command");
 const rag_queries_1 = require("../../application/queries/rag.queries");
@@ -27,21 +27,23 @@ const upload_folder_command_1 = require("../../application/commands/upload-folde
 const retrieve_dto_1 = require("../dto/retrieve.dto");
 const upload_folder_dto_1 = require("../dto/upload-folder.dto");
 let RagDocumentsController = class RagDocumentsController {
-    constructor(commandBus, askQuestionHandler) {
+    constructor(commandBus) {
         this.commandBus = commandBus;
-        this.askQuestionHandler = askQuestionHandler;
     }
-    async askQuestion(dto) {
-        const command = new ask_question_command_1.AskQuestionCommand(dto.question, {
+    buildAskOptions(dto) {
+        return {
             limit: dto.limit,
             scoreThreshold: dto.scoreThreshold,
+            filters: dto.filters,
             useHybridSearch: dto.options?.useHybridSearch,
             useReranking: dto.options?.useReranking,
-            rerankStrategy: dto.rerankStrategy,
+            rerankStrategy: dto.options?.rerankStrategy ?? dto.rerankStrategy,
             useQueryTransformation: dto.options?.useQueryTransformation,
             useContextualCompression: dto.options?.useContextualCompression,
             useConversationMemory: dto.options?.useConversationMemory,
             useCitationTracking: dto.options?.useCitationTracking,
+            includeRetrievalDiagnostics: dto.options?.includeRetrievalDiagnostics,
+            useAnswerCache: dto.options?.useAnswerCache,
             useKnowledgeGraph: dto.options?.useKnowledgeGraph,
             temperature: dto.temperature,
             topP: dto.topP,
@@ -50,11 +52,16 @@ let RagDocumentsController = class RagDocumentsController {
             includeSources: dto.includeSources,
             sessionId: dto.options?.sessionId,
             conversationHistory: dto.conversationHistory,
-        });
-        const answer = await this.commandBus.execute(command);
+        };
+    }
+    async askQuestion(dto) {
+        const answer = await this.commandBus.execute(new ask_question_command_1.AskQuestionCommand(dto.question, this.buildAskOptions(dto)));
         return api_response_1.ApiResponse.success(answer, new meta_1.Meta({ message: 'Answer generated successfully' }));
     }
     async askQuestionStream(dto, res) {
+        if (!dto.question?.trim()) {
+            throw new common_1.BadRequestException('A valid question must be provided.');
+        }
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
@@ -62,31 +69,14 @@ let RagDocumentsController = class RagDocumentsController {
         res.setHeader('Content-Encoding', 'none');
         res.flushHeaders();
         res.socket?.setNoDelay(true);
-        const command = new ask_question_command_1.AskQuestionCommand(dto.question, {
-            limit: dto.limit,
-            scoreThreshold: dto.scoreThreshold,
-            useHybridSearch: dto.options?.useHybridSearch,
-            useReranking: dto.options?.useReranking,
-            rerankStrategy: dto.rerankStrategy,
-            useQueryTransformation: dto.options?.useQueryTransformation,
-            useContextualCompression: dto.options?.useContextualCompression,
-            useConversationMemory: dto.options?.useConversationMemory,
-            useCitationTracking: dto.options?.useCitationTracking,
-            useKnowledgeGraph: dto.options?.useKnowledgeGraph,
-            temperature: dto.temperature,
-            topP: dto.topP,
-            topK: dto.topK,
-            maxTokens: dto.maxTokens,
-            includeSources: dto.includeSources,
-            sessionId: dto.options?.sessionId,
-            conversationHistory: dto.conversationHistory,
-        });
+        const command = new ask_question_stream_command_1.AskQuestionStreamCommand(dto.question, this.buildAskOptions(dto));
         const writeChunk = (chunk, eventName) => {
             res.write(`event: ${eventName}\ndata: ${JSON.stringify(chunk)}\n\n`);
             res.flush?.();
         };
         try {
-            for await (const chunk of this.askQuestionHandler.streamableExecute(command)) {
+            const stream = await this.commandBus.execute(command);
+            for await (const chunk of stream) {
                 writeChunk(chunk, chunk.event);
                 if (chunk.event === 'done' || chunk.event === 'error')
                     break;
@@ -219,6 +209,6 @@ __decorate([
 exports.RagDocumentsController = RagDocumentsController = __decorate([
     (0, common_1.Controller)('rag/documents'),
     __param(0, (0, common_1.Inject)('CommandBus')),
-    __metadata("design:paramtypes", [Object, ask_question_handler_1.AskQuestionHandler])
+    __metadata("design:paramtypes", [Object])
 ], RagDocumentsController);
 //# sourceMappingURL=rag-documents.controller.js.map

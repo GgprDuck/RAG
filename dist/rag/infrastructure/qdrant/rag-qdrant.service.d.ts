@@ -1,7 +1,8 @@
 import { ConfigService } from '@nestjs/config';
 import { Schemas } from '@qdrant/js-client-rest';
 import { CollectionConfig } from "../../domain/value-objects/collection-config.vo";
-export type SearchMode = 'precise' | 'wide' | 'balanced';
+import type { TextVectorSearchMode } from "../../domain/ports/text-vector-search.port";
+export type SearchMode = TextVectorSearchMode;
 export declare class RagQdrantService {
     private readonly configService;
     private readonly client;

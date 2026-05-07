@@ -49,6 +49,14 @@ __decorate([
     __metadata("design:type", String)
 ], MetadataFilter.prototype, "field", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({
+        description: 'Value used by the filter operation',
+        example: 'hr',
+    }),
+    (0, class_validator_1.IsDefined)(),
+    __metadata("design:type", Object)
+], MetadataFilter.prototype, "value", void 0);
+__decorate([
     (0, swagger_1.ApiPropertyOptional)({
         description: 'Comparison operator',
         enum: ['eq', 'ne', 'gt', 'lt', 'gte', 'lte', 'in'],
@@ -74,6 +82,16 @@ __decorate([
     __metadata("design:type", Boolean)
 ], AdvancedRagOptionsDto.prototype, "useReranking", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        enum: RerankStrategy,
+        description: 'Reranking strategy — set to "none" to disable reranking entirely',
+        default: RerankStrategy.NONE,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(RerankStrategy),
+    __metadata("design:type", String)
+], AdvancedRagOptionsDto.prototype, "rerankStrategy", void 0);
+__decorate([
     (0, swagger_1.ApiPropertyOptional)({ default: true, description: 'Expand and rephrase query before retrieval' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsBoolean)(),
@@ -97,6 +115,18 @@ __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
 ], AdvancedRagOptionsDto.prototype, "useCitationTracking", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ default: false, description: 'Include retrieval diagnostics in response metadata' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], AdvancedRagOptionsDto.prototype, "includeRetrievalDiagnostics", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ default: true, description: 'Enable short-lived answer cache for repeated questions' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], AdvancedRagOptionsDto.prototype, "useAnswerCache", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({ default: false, description: 'Enrich context with Neo4j knowledge graph entities' }),
     (0, class_validator_1.IsOptional)(),
@@ -206,7 +236,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
         enum: RerankStrategy,
-        description: 'Reranking strategy for retrieved documents',
+        description: 'Deprecated: top-level reranking strategy. Prefer options.rerankStrategy.',
         default: RerankStrategy.NONE,
     }),
     (0, class_validator_1.IsOptional)(),

@@ -25,11 +25,11 @@ const neo4j_module_1 = require("./infrastructure/neo4j/neo4j.module");
 const redis_module_1 = require("./infrastructure/redis/redis.module");
 const qdrant_text_document_repository_1 = require("./infrastructure/qdrant/repositories/qdrant-text-document.repository");
 const qdrant_image_document_repository_1 = require("./infrastructure/qdrant/repositories/qdrant-image-document.repository");
-const neo4j_knowledge_graph_service_1 = require("./infrastructure/neo4j/neo4j-knowledge-graph.service");
 const text_rag_service_1 = require("./application/services/text-rag.service");
 const image_rag_service_1 = require("./application/services/image-rag.service");
 const command_bus_module_1 = require("./shared/infrastructure/command-bus.module");
 const ask_question_handler_1 = require("./application/handlers/ask-question.handler");
+const ask_question_stream_handler_1 = require("./application/handlers/ask-question-stream.handler");
 const upload_knowledge_handler_1 = require("./application/handlers/upload-knowledge.handler");
 const delete_document_handler_1 = require("./application/handlers/delete-document.handler");
 const process_images_handler_1 = require("./application/handlers/process-images.handler");
@@ -37,6 +37,7 @@ const delete_image_handler_1 = require("./application/handlers/delete-image.hand
 const upload_folder_handler_1 = require("./application/handlers/upload-folder.handler");
 const rag_query_handlers_1 = require("./application/queries/rag-query.handlers");
 const ask_question_command_1 = require("./application/commands/ask-question.command");
+const ask_question_stream_command_1 = require("./application/commands/ask-question-stream.command");
 const upload_knowledge_command_1 = require("./application/commands/upload-knowledge.command");
 const delete_document_command_1 = require("./application/commands/delete-document.command");
 const process_images_command_1 = require("./application/commands/process-images.command");
@@ -46,8 +47,9 @@ const rag_queries_1 = require("./application/queries/rag.queries");
 const rag_documents_controller_1 = require("./presentation/controllers/rag-documents.controller");
 const image_controller_1 = require("./presentation/controllers/image.controller");
 const console_logger_adapter_1 = require("./shared/application/ports/console.logger.adapter");
-const ollama_chat_adapter_1 = require("./infrastructure/ollama/ollama-chat.adapter");
-const ollama_embedding_adapter_1 = require("./infrastructure/ollama/ollama-embedding.adapter");
+const langchain_chat_adapter_1 = require("./infrastructure/langchain/langchain-chat.adapter");
+const langchain_embedding_adapter_1 = require("./infrastructure/langchain/langchain-embedding.adapter");
+const langchain_retriever_adapter_1 = require("./infrastructure/langchain/langchain-retriever.adapter");
 const confidence_service_1 = require("./application/services/confidence.service");
 const link_service_1 = require("./application/services/link.service");
 const chat_controller_1 = require("./presentation/controllers/chat.controller");
@@ -56,10 +58,12 @@ const link_controller_1 = require("./presentation/controllers/link.controller");
 const extract_links_handler_1 = require("./application/handlers/extract-links.handler");
 const extract_links_command_1 = require("./application/commands/extract-links.command");
 const cache_module_1 = require("./infrastructure/redis/cache.module");
+const rag_settings_adapter_1 = require("./infrastructure/config/rag-settings.adapter");
 let RagModule = class RagModule {
-    constructor(bus, askQuestion, uploadKnowledge, deleteDocument, processImages, deleteImage, uploadFolder, getAllDocuments, getAllImages, getImagesByKeyword, retrieveDocuments, extractLinks) {
+    constructor(bus, askQuestion, askQuestionStream, uploadKnowledge, deleteDocument, processImages, deleteImage, uploadFolder, getAllDocuments, getAllImages, getImagesByKeyword, retrieveDocuments, extractLinks) {
         this.bus = bus;
         this.askQuestion = askQuestion;
+        this.askQuestionStream = askQuestionStream;
         this.uploadKnowledge = uploadKnowledge;
         this.deleteDocument = deleteDocument;
         this.processImages = processImages;
@@ -73,6 +77,7 @@ let RagModule = class RagModule {
     }
     onModuleInit() {
         this.bus.register(ask_question_command_1.AskQuestionCommand, this.askQuestion);
+        this.bus.register(ask_question_stream_command_1.AskQuestionStreamCommand, this.askQuestionStream);
         this.bus.register(upload_knowledge_command_1.UploadKnowledgeCommand, this.uploadKnowledge);
         this.bus.register(delete_document_command_1.DeleteDocumentCommand, this.deleteDocument);
         this.bus.register(process_images_command_1.ProcessImagesCommand, this.processImages);
@@ -100,13 +105,16 @@ exports.RagModule = RagModule = __decorate([
             cache_module_1.CacheModule,
         ],
         providers: [
+            rag_settings_adapter_1.RagSettingsAdapter,
+            langchain_retriever_adapter_1.LangChainRetrieverAdapter,
+            { provide: 'IRagSettingsPort', useExisting: rag_settings_adapter_1.RagSettingsAdapter },
+            { provide: 'IRagContextFormattingPort', useExisting: langchain_retriever_adapter_1.LangChainRetrieverAdapter },
             { provide: 'LoggerPort', useClass: console_logger_adapter_1.ConsoleLoggerAdapter },
-            { provide: 'IEmbeddingPort', useClass: ollama_embedding_adapter_1.OllamaEmbeddingAdapter },
-            { provide: 'IChatLlmPort', useClass: ollama_chat_adapter_1.OllamaChatAdapter },
+            { provide: 'IEmbeddingPort', useClass: langchain_embedding_adapter_1.LangChainEmbeddingAdapter },
+            { provide: 'IChatLlmPort', useClass: langchain_chat_adapter_1.LangChainChatAdapter },
             { provide: 'ITextDocumentRepository', useExisting: qdrant_text_document_repository_1.QdrantTextDocumentRepository },
             { provide: 'IImageDocumentRepository', useExisting: qdrant_image_document_repository_1.QdrantImageDocumentRepository },
             { provide: 'IStoragePort', useExisting: s3_storage_service_1.S3StorageService },
-            { provide: 'IKnowledgeGraphPort', useClass: neo4j_knowledge_graph_service_1.Neo4jKnowledgeGraphService },
             { provide: 'TextRagPort', useClass: text_rag_service_1.TextRagService },
             { provide: 'ImageRagPort', useClass: image_rag_service_1.ImageRagService },
             { provide: 'IConfidencePort', useExisting: confidence_service_1.ConfidenceService },
@@ -115,6 +123,7 @@ exports.RagModule = RagModule = __decorate([
             link_service_1.LinkService,
             confidence_service_1.ConfidenceService,
             ask_question_handler_1.AskQuestionHandler,
+            ask_question_stream_handler_1.AskQuestionStreamHandler,
             upload_knowledge_handler_1.UploadKnowledgeHandler,
             delete_document_handler_1.DeleteDocumentHandler,
             process_images_handler_1.ProcessImagesHandler,
@@ -135,6 +144,7 @@ exports.RagModule = RagModule = __decorate([
     }),
     __param(0, (0, common_1.Inject)('CommandBus')),
     __metadata("design:paramtypes", [Object, ask_question_handler_1.AskQuestionHandler,
+        ask_question_stream_handler_1.AskQuestionStreamHandler,
         upload_knowledge_handler_1.UploadKnowledgeHandler,
         delete_document_handler_1.DeleteDocumentHandler,
         process_images_handler_1.ProcessImagesHandler,

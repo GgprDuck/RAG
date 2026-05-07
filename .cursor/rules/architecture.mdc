@@ -1,0 +1,14 @@
+---
+description: Core architecture rules for the RAG Demo API — always enforced
+alwaysApply: false
+---
+# RAG Demo API — Core Rules
+
+## Stack
+NestJS + TypeScript  
+Architecture: Clean Architecture + CQRS  
+Infra: Ollama, Qdrant, Neo4j, PostgreSQL (Prisma), Redis, MinIO
+
+---
+
+## Layer Order

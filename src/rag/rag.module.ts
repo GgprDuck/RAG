@@ -10,12 +10,12 @@ import { Neo4jModule } from './infrastructure/neo4j/neo4j.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { QdrantTextDocumentRepository } from './infrastructure/qdrant/repositories/qdrant-text-document.repository';
 import { QdrantImageDocumentRepository } from './infrastructure/qdrant/repositories/qdrant-image-document.repository';
-import { Neo4jKnowledgeGraphService } from './infrastructure/neo4j/neo4j-knowledge-graph.service';
 import { TextRagService } from './application/services/text-rag.service';
 import { ImageRagService } from './application/services/image-rag.service';
 import { RagCommandBusModule } from './shared/infrastructure/command-bus.module';
 import { CommandBusPort } from './shared/application/ports/command-bus.port';
 import { AskQuestionHandler } from './application/handlers/ask-question.handler';
+import { AskQuestionStreamHandler } from './application/handlers/ask-question-stream.handler';
 import { UploadKnowledgeHandler } from './application/handlers/upload-knowledge.handler';
 import { DeleteDocumentHandler } from './application/handlers/delete-document.handler';
 import { ProcessImagesHandler } from './application/handlers/process-images.handler';
@@ -28,6 +28,7 @@ import {
   RetrieveDocumentsHandler,
 } from './application/queries/rag-query.handlers';
 import { AskQuestionCommand } from './application/commands/ask-question.command';
+import { AskQuestionStreamCommand } from './application/commands/ask-question-stream.command';
 import { UploadKnowledgeCommand } from './application/commands/upload-knowledge.command';
 import { DeleteDocumentCommand } from './application/commands/delete-document.command';
 import { ProcessImagesCommand } from './application/commands/process-images.command';
@@ -42,8 +43,9 @@ import {
 import { RagDocumentsController } from './presentation/controllers/rag-documents.controller';
 import { RagImagesController } from './presentation/controllers/image.controller';
 import { ConsoleLoggerAdapter } from './shared/application/ports/console.logger.adapter';
-import { OllamaChatAdapter } from './infrastructure/ollama/ollama-chat.adapter';
-import { OllamaEmbeddingAdapter } from './infrastructure/ollama/ollama-embedding.adapter';
+import { LangChainChatAdapter } from './infrastructure/langchain/langchain-chat.adapter';
+import { LangChainEmbeddingAdapter } from './infrastructure/langchain/langchain-embedding.adapter';
+import { LangChainRetrieverAdapter } from './infrastructure/langchain/langchain-retriever.adapter';
 import { ConfidenceService } from './application/services/confidence.service';
 import { LinkService } from './application/services/link.service';
 import { ChatController } from './presentation/controllers/chat.controller';
@@ -52,6 +54,7 @@ import { LinksController } from './presentation/controllers/link.controller';
 import { ExtractLinksHandler } from './application/handlers/extract-links.handler';
 import { IndexLinksCommand } from './application/commands/extract-links.command';
 import { CacheModule } from './infrastructure/redis/cache.module';
+import { RagSettingsAdapter } from './infrastructure/config/rag-settings.adapter';
 
 @Module({
   imports: [
@@ -66,13 +69,16 @@ import { CacheModule } from './infrastructure/redis/cache.module';
     CacheModule,
   ],
   providers: [
+    RagSettingsAdapter,
+    LangChainRetrieverAdapter,
+    { provide: 'IRagSettingsPort',          useExisting: RagSettingsAdapter },
+    { provide: 'IRagContextFormattingPort', useExisting: LangChainRetrieverAdapter },
     { provide: 'LoggerPort',               useClass: ConsoleLoggerAdapter },
-    { provide: 'IEmbeddingPort',           useClass: OllamaEmbeddingAdapter },
-    { provide: 'IChatLlmPort',             useClass: OllamaChatAdapter },
+    { provide: 'IEmbeddingPort',           useClass: LangChainEmbeddingAdapter },
+    { provide: 'IChatLlmPort',             useClass: LangChainChatAdapter },
     { provide: 'ITextDocumentRepository',  useExisting: QdrantTextDocumentRepository },
     { provide: 'IImageDocumentRepository', useExisting: QdrantImageDocumentRepository },
     { provide: 'IStoragePort',             useExisting: S3StorageService },
-    { provide: 'IKnowledgeGraphPort',      useClass: Neo4jKnowledgeGraphService },
     { provide: 'TextRagPort',              useClass: TextRagService },
     { provide: 'ImageRagPort',             useClass: ImageRagService },
     { provide: 'IConfidencePort',          useExisting: ConfidenceService },
@@ -81,6 +87,7 @@ import { CacheModule } from './infrastructure/redis/cache.module';
     LinkService,
     ConfidenceService,
     AskQuestionHandler,
+    AskQuestionStreamHandler,
     UploadKnowledgeHandler,
     DeleteDocumentHandler,
     ProcessImagesHandler,
@@ -103,6 +110,7 @@ export class RagModule implements OnModuleInit {
   constructor(
     @Inject('CommandBus') private readonly bus: CommandBusPort,
     private readonly askQuestion: AskQuestionHandler,
+    private readonly askQuestionStream: AskQuestionStreamHandler,
     private readonly uploadKnowledge: UploadKnowledgeHandler,
     private readonly deleteDocument: DeleteDocumentHandler,
     private readonly processImages: ProcessImagesHandler,
@@ -116,7 +124,8 @@ export class RagModule implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.bus.register(AskQuestionCommand,      this.askQuestion);
+    this.bus.register(AskQuestionCommand,       this.askQuestion);
+    this.bus.register(AskQuestionStreamCommand, this.askQuestionStream);
     this.bus.register(UploadKnowledgeCommand,  this.uploadKnowledge);
     this.bus.register(DeleteDocumentCommand,   this.deleteDocument);
     this.bus.register(ProcessImagesCommand,    this.processImages);

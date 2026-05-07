@@ -1,0 +1,85 @@
+---
+globs: src/rag/domain/**/*
+alwaysApply: false
+---
+# Domain Layer Rules
+
+## Core Principle
+Domain is fully isolated.
+
+- MUST have zero external dependencies
+- MUST NOT depend on any other layer
+
+---
+
+## Allowed
+
+- Entities
+- Value Objects
+- Repository interfaces
+- Domain exceptions
+
+---
+
+## Forbidden
+
+### Imports
+- application/**
+- infrastructure/**
+- presentation/**
+- NestJS
+- Prisma / ORM
+- HTTP types (Request, Response, DTOs)
+
+### Usage
+- Decorators (@Injectable, @Inject, etc.)
+- External services or SDKs
+
+---
+
+## Entities
+
+### Required
+- Must have identity
+- Must contain domain logic only
+
+### Forbidden
+- Infrastructure logic
+- Persistence logic
+
+---
+
+## Value Objects
+
+### Required
+- Must be immutable
+- Must validate input in constructor
+- Must implement equality
+
+---
+
+## Repositories
+
+### Required
+- Interfaces only
+- Use domain types only (Entities, Value Objects)
+
+### Forbidden
+- Implementations
+- ORM types
+
+---
+
+## Exceptions
+
+- Must represent domain errors only
+- No HTTP or framework exceptions
+
+---
+
+## File Naming
+
+- entities → `*.entity.ts`
+- value-objects → `*.value-object.ts`
+- repositories → `*.repository.ts`
+- exceptions → `*.exception.ts`

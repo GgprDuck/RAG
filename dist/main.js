@@ -43,8 +43,8 @@ async function bootstrap() {
         swagger_1.SwaggerModule.setup('api', app, document);
     }
     await app.listen(3000);
-    console.log('RAG demo running on http://localhost:3000');
-    console.log('Swagger UI: http://localhost:3000/api');
+    common_1.Logger.log('RAG demo running on http://localhost:3000', 'Bootstrap');
+    common_1.Logger.log('Swagger UI: http://localhost:3000/api', 'Bootstrap');
 }
 bootstrap();
 //# sourceMappingURL=main.js.map

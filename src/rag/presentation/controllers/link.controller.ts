@@ -162,9 +162,9 @@ import {
         );
       }
   
-      // Normalise paths coming from the browser's webkitdirectory picker.
-      // The frontend sends webkitRelativePath as the filename, e.g. "vault/api/guide.md".
-      // We sanitise separators and strip any accidental leading slash.
+      
+      
+      
       const normalizedFiles = files.map((file) => ({
         ...file,
         originalname: file.originalname

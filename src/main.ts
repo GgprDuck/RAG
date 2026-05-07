@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { AllExceptionsFilter } from './rag/shared/nest/filters/all-exeption.filter';
 import helmet from 'helmet';
 
@@ -58,8 +58,8 @@ async function bootstrap() {
   }
 
   await app.listen(3000);
-  console.log('RAG demo running on http://localhost:3000');
-  console.log('Swagger UI: http://localhost:3000/api');
+  Logger.log('RAG demo running on http://localhost:3000', 'Bootstrap');
+  Logger.log('Swagger UI: http://localhost:3000/api', 'Bootstrap');
 }
 
 bootstrap();

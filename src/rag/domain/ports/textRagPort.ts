@@ -43,14 +43,7 @@ export interface TextRagPort {
     options?: AskQuestionOptions,
   ): Promise<IGenerateAnswer | string>;
 
-  /**
-   * Streaming variant of `generateAnswer`.
-   *
-   * Yields `IStreamChunk` events in order:
-   *   `metadata` → (`sources`?) → `token`* → (`citations`?) → `done`
-   *
-   * On failure yields an `error` event and terminates.
-   */
+  
   streamableGenerateAnswer(
     question: string,
     options?: AskQuestionOptions,

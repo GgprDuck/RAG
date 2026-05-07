@@ -10,6 +10,7 @@ exports.PrismaModule = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("./prisma.service");
 const conversation_session_prisma_repository_1 = require("./repositories/conversation-session-prisma.repository");
+const console_logger_adapter_1 = require("../../shared/application/ports/console.logger.adapter");
 let PrismaModule = class PrismaModule {
 };
 exports.PrismaModule = PrismaModule;
@@ -22,6 +23,10 @@ exports.PrismaModule = PrismaModule = __decorate([
             {
                 provide: 'IConversationSessionRepository',
                 useExisting: conversation_session_prisma_repository_1.ConversationSessionPrismaRepository,
+            },
+            {
+                provide: 'LoggerPort',
+                useClass: console_logger_adapter_1.ConsoleLoggerAdapter,
             },
         ],
         exports: [

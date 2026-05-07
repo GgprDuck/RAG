@@ -1,5 +1,4 @@
 import { Injectable, Inject, InternalServerErrorException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 import { IImageDocumentRepository } from '../../domain/repositories/image-document.repository';
 import { ImageDocument } from '../../domain/entities/image-document.entity';
@@ -7,7 +6,7 @@ import { Embedding } from '../../domain/value-objects/embedding.vo';
 import { SimilarityScore } from '../../domain/value-objects/similarity-score.vo';
 import { extractEmbedding } from '../utils/embedding.util';
 import { levenshteinDistance, parseQueryWithNegation } from '../utils/text-query.util';
-import { RAG_CONFIG, TRagConfig } from '../../infrastructure/config/rag-config';
+import type { IRagSettingsPort } from 'src/rag/domain/ports/rag-settings.port';
 import { IUploadedFile } from 'src/rag/domain/interfaces/upload-folder.interface';
 import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
 import { IUploadImage, IDeleteImage, IImageWithScore, IImageWithoutScore } from '../common/interfaces/image.interfaces';
@@ -20,7 +19,7 @@ import { ImageRagPort } from 'src/rag/domain/ports/image-rag.port';
 @Injectable()
 export class ImageRagService implements ImageRagPort {
   constructor(
-    private readonly configService: ConfigService,
+    @Inject('IRagSettingsPort') private readonly ragSettings: IRagSettingsPort,
     @Inject('IEmbeddingPort') private readonly embeddingPort: IEmbeddingPort,
     @Inject('IChatLlmPort') private readonly chatLlm: IChatLlmPort,
     @Inject('IStoragePort') private readonly storage: IStoragePort,
@@ -30,8 +29,7 @@ export class ImageRagService implements ImageRagPort {
   ) {}
 
   async uploadImages(files: IUploadedFile[]): Promise<IUploadImage> {
-    const ragConfig = this.configService.get<TRagConfig>(RAG_CONFIG);
-    const embedModel = ragConfig?.ollamaEmbedModelText || 'nomic-embed-text';
+    const { ollamaEmbedModelText: embedModel } = this.ragSettings.get();
     const createdAt = new Date();
 
     const documents = await Promise.all(
@@ -80,8 +78,8 @@ export class ImageRagService implements ImageRagPort {
   }
 
   async getImagesByKeyword(query: string, limit = 10): Promise<Array<IImageWithScore>> {
-    const ragConfig = this.configService.get<TRagConfig>(RAG_CONFIG);
-    const minScore = new SimilarityScore(ragConfig?.imageRagMinScoreThreshold ?? 0.55);
+    const { imageRagMinScoreThreshold } = this.ragSettings.get();
+    const minScore = new SimilarityScore(imageRagMinScoreThreshold);
 
     const embeddingRaw = await this.embeddingPort.embed(query);
     const embedding = extractEmbedding(embeddingRaw);

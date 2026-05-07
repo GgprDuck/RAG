@@ -64,22 +64,61 @@ const PROFILE_BY_TYPE = {
     },
 };
 function preGuardClassify(query) {
-    const q = query.toLowerCase().replace(/[?!.,;:]/g, '').trim();
+    const raw = query.trim();
+    const q = raw.toLowerCase().replace(/[?!.,;:]/g, '').trim();
+    const looksLikePersonSubject = (subjectRaw) => {
+        const subject = subjectRaw.trim();
+        if (!subject || /\d/.test(subject))
+            return false;
+        const tokens = subject
+            .split(/\s+/)
+            .map((t) => t.replace(/^[^\p{L}]+|[^\p{L}'-]+$/gu, ''))
+            .filter(Boolean);
+        if (tokens.length === 0 || tokens.length > 3)
+            return false;
+        const nonPersonWords = new Set([
+            'onix', 'company', 'компанія', 'department', 'департамент', 'відділ',
+            'team', 'команда', 'product', 'tool', 'academy', 'platform', 'system',
+            'hr', 'qa', 'node', 'react',
+        ]);
+        if (tokens.some((t) => nonPersonWords.has(t.toLowerCase())))
+            return false;
+        const capitalizedCount = tokens.filter((t) => /^[\p{Lu}][\p{L}'-]*$/u.test(t)).length;
+        return capitalizedCount >= 1;
+    };
     const isNameOriginQuery = /\b(why|what|what is)\b.{0,30}\b(name|called|named|mean|origin|history|founded|create)\b/i.test(q) ||
         /\b(name|назв).{0,20}\b(company|компан|brand|бренд)\b/i.test(q) ||
         /\b(company|компан).{0,20}\b(name|назв|called|mean)\b/i.test(q);
     if (isNameOriginQuery)
         return 'factual';
+    const isWhatIs = /^(what is|what are|що таке|що це|що таке|що є)\s+\S+(\s+\S+)?$/.test(q);
+    if (isWhatIs)
+        return 'wide';
+    const aboutSingleSubjectMatch = raw.match(/^(tell me about|describe|overview of|розкажи про|опиши)\s+(.+)$/i);
+    if (aboutSingleSubjectMatch) {
+        const subject = aboutSingleSubjectMatch[2].trim();
+        if (subject.split(/\s+/).length <= 3 && !looksLikePersonSubject(subject)) {
+            return 'wide';
+        }
+    }
     const isAboutSomething = /\b(tell me about|describe|overview of|what are)\b/i.test(q) ||
         /\b(розкажи|опиши|що таке|що це)\b/i.test(q);
     const hasNonPersonSubject = /\b(company|компан|organization|product|tool|department|відділ|команд|team|process|процес|academy|академі|platform|system|системи|software)\b/i.test(q);
     if (isAboutSomething && hasNonPersonSubject)
         return 'wide';
+    const tokens = q.split(/\s+/).filter(t => t.length > 0);
+    const stopWords = new Set(['what', 'is', 'are', 'who', 'how', 'tell', 'me', 'about', 'the', 'a', 'an']);
+    const meaningfulTokens = tokens.filter(t => !stopWords.has(t));
+    if (meaningfulTokens.length === 1 &&
+        /^[a-z]/.test(meaningfulTokens[0]) &&
+        ['onix', 'company', 'product', 'tool', 'department', 'academy'].includes(meaningfulTokens[0])) {
+        return 'wide';
+    }
     return null;
 }
 class QueryClassifier {
-    constructor(ollama) {
-        this.ollama = ollama;
+    constructor(chatLlm) {
+        this.chatLlm = chatLlm;
     }
     async classify(query) {
         const preGuard = preGuardClassify(query);
@@ -125,7 +164,7 @@ Query: "${query}"
 
 JSON: {"type": "entity" | "factual" | "wide", "confidence": 0.0-1.0}`;
         try {
-            const raw = await this.ollama.getRagResponseByPrompt(prompt, {
+            const raw = await this.chatLlm.complete(prompt, {
                 temperature: 0,
                 maxTokens: 60,
                 topK: 1,

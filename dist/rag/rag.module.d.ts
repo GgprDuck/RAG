@@ -1,6 +1,7 @@
 import { OnModuleInit } from '@nestjs/common';
 import { CommandBusPort } from './shared/application/ports/command-bus.port';
 import { AskQuestionHandler } from './application/handlers/ask-question.handler';
+import { AskQuestionStreamHandler } from './application/handlers/ask-question-stream.handler';
 import { UploadKnowledgeHandler } from './application/handlers/upload-knowledge.handler';
 import { DeleteDocumentHandler } from './application/handlers/delete-document.handler';
 import { ProcessImagesHandler } from './application/handlers/process-images.handler';
@@ -11,6 +12,7 @@ import { ExtractLinksHandler } from './application/handlers/extract-links.handle
 export declare class RagModule implements OnModuleInit {
     private readonly bus;
     private readonly askQuestion;
+    private readonly askQuestionStream;
     private readonly uploadKnowledge;
     private readonly deleteDocument;
     private readonly processImages;
@@ -21,6 +23,6 @@ export declare class RagModule implements OnModuleInit {
     private readonly getImagesByKeyword;
     private readonly retrieveDocuments;
     private readonly extractLinks;
-    constructor(bus: CommandBusPort, askQuestion: AskQuestionHandler, uploadKnowledge: UploadKnowledgeHandler, deleteDocument: DeleteDocumentHandler, processImages: ProcessImagesHandler, deleteImage: DeleteImageHandler, uploadFolder: UploadFolderHandler, getAllDocuments: GetAllDocumentsHandler, getAllImages: GetAllImagesHandler, getImagesByKeyword: GetImagesByKeywordHandler, retrieveDocuments: RetrieveDocumentsHandler, extractLinks: ExtractLinksHandler);
+    constructor(bus: CommandBusPort, askQuestion: AskQuestionHandler, askQuestionStream: AskQuestionStreamHandler, uploadKnowledge: UploadKnowledgeHandler, deleteDocument: DeleteDocumentHandler, processImages: ProcessImagesHandler, deleteImage: DeleteImageHandler, uploadFolder: UploadFolderHandler, getAllDocuments: GetAllDocumentsHandler, getAllImages: GetAllImagesHandler, getImagesByKeyword: GetImagesByKeywordHandler, retrieveDocuments: RetrieveDocumentsHandler, extractLinks: ExtractLinksHandler);
     onModuleInit(): void;
 }

@@ -1,0 +1,40 @@
+---
+description: Infrastructure layer rules — external adapters only
+globs: src/rag/infrastructure/**/*
+alwaysApply: false
+---
+
+# Infrastructure Layer Rules
+
+## Core Principle
+Infrastructure implements ports ONLY.
+
+- MUST NOT contain business logic
+- MUST NOT define domain rules
+- MUST NOT be used directly by application layer
+
+---
+
+## Allowed
+
+- Port implementations (adapters)
+- NestJS modules (integration only)
+- External service clients (Qdrant, Neo4j, Prisma, Redis, S3, Ollama)
+- Mappers (domain ↔ persistence)
+- Config factory
+
+---
+
+## Forbidden
+
+- Business logic
+- Domain entities
+- Application services
+- Direct usage in handlers
+- Cross-layer imports (infrastructure → application/domain logic)
+
+---
+
+## Module-per-service rule
+
+Each external system MUST be isolated:

@@ -33,6 +33,8 @@ export interface AskQuestionOptions {
 
   useCitationTracking?: boolean;
   includeSources?: boolean;
+  includeRetrievalDiagnostics?: boolean;
+  useAnswerCache?: boolean;
 
   temperature?: number;
   maxTokens?: number;

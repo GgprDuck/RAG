@@ -11,6 +11,10 @@ export class OllamaChatAdapter implements IChatLlmPort {
       temperature: options?.temperature,
       topP: options?.topP,
       topK: options?.topK,
+      maxTokens: options?.maxTokens,
+      repeatPenalty: options?.repeatPenalty,
+      seed: options?.seed,
+      stop: options?.stop,
     });
   }
 
@@ -23,5 +27,17 @@ export class OllamaChatAdapter implements IChatLlmPort {
 
   async extractKeywords(text: string): Promise<string[]> {
     return this.ollama.extractKeywords(text);
+  }
+
+  stream(prompt: string, options?: LlmOptions): AsyncGenerator<string> {
+    return this.ollama.getRagResponseByPromptStream(prompt, {
+      temperature: options?.temperature,
+      topP: options?.topP,
+      topK: options?.topK,
+      maxTokens: options?.maxTokens,
+      repeatPenalty: options?.repeatPenalty,
+      seed: options?.seed,
+      stop: options?.stop,
+    });
   }
 }

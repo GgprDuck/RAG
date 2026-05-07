@@ -78,9 +78,18 @@ export class OllamaService {
       .digest('hex')}`;
 
     try {
-      const cached = await this.cache.get<number[]>(cacheKey);
-      if (cached) {
-        return cached;
+      const cached = await this.cache.get<unknown>(cacheKey);
+      if (Array.isArray(cached) && cached.length > 0) {
+        return cached as number[];
+      }
+      if (typeof cached === 'string') {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed as number[];
+          }
+        } catch {
+        }
       }
     } catch (err: any) {
       this.logger.warn('embed: Redis get failed', { error: err?.message });
@@ -93,19 +102,24 @@ export class OllamaService {
         { timeout: this.timeout, headers: this.getHeaders() },
       );
 
-      const embedding = response.data?.embedding;
+      const embedding =
+        response.data?.embedding ??
+        response.data?.embeddings?.[0] ??
+        response.data?.data?.[0]?.embedding;
 
       if (!Array.isArray(embedding) || embedding.length === 0) {
-        this.logger.warn('Empty embedding, skipping chunk');
+        this.logger.warn('Empty embedding, skipping chunk', {
+          responseKeys: response?.data && typeof response.data === 'object'
+            ? Object.keys(response.data)
+            : [],
+        });
         return null;
       }
 
       try {
-        const value = JSON.stringify(embedding);
-      
         await this.cache.set(
           cacheKey,
-          value,
+          embedding,
           EMBED_TTL_SECONDS,
         );
 

@@ -23,6 +23,8 @@ export interface AskQuestionOptions {
     useKnowledgeGraph?: boolean;
     useCitationTracking?: boolean;
     includeSources?: boolean;
+    includeRetrievalDiagnostics?: boolean;
+    useAnswerCache?: boolean;
     temperature?: number;
     maxTokens?: number;
 }

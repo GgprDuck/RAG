@@ -20,8 +20,8 @@ exports.Neo4jModule = Neo4jModule = __decorate([
         providers: [
             neo4j_knowledge_graph_service_1.Neo4jKnowledgeGraphService,
             {
-                provide: 'IKnowledgeGraphService',
-                useClass: neo4j_knowledge_graph_service_1.Neo4jKnowledgeGraphService,
+                provide: 'IKnowledgeGraphPort',
+                useExisting: neo4j_knowledge_graph_service_1.Neo4jKnowledgeGraphService,
             },
             {
                 provide: 'LoggerPort',
@@ -29,7 +29,7 @@ exports.Neo4jModule = Neo4jModule = __decorate([
             },
         ],
         exports: [
-            'IKnowledgeGraphService',
+            'IKnowledgeGraphPort',
             neo4j_knowledge_graph_service_1.Neo4jKnowledgeGraphService,
         ],
     })

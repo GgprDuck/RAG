@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { RagQdrantService } from './rag-qdrant.service';
+import { QdrantVectorSearchAdapter } from './qdrant-vector-search.adapter';
 import { QdrantImageDocumentRepository } from './repositories/qdrant-image-document.repository';
 import { QdrantTextDocumentRepository } from './repositories/qdrant-text-document.repository';
 import { OllamaModule } from '../ollama/ollama.module';
@@ -11,6 +12,11 @@ import { ConsoleLoggerAdapter } from 'src/rag/shared/application/ports/console.l
   imports: [ConfigModule, OllamaModule, S3Module],
   providers: [
     RagQdrantService,
+    QdrantVectorSearchAdapter,
+    {
+      provide: 'ITextVectorSearchPort',
+      useExisting: QdrantVectorSearchAdapter,
+    },
     QdrantImageDocumentRepository,
     QdrantTextDocumentRepository,
     {
@@ -28,6 +34,8 @@ import { ConsoleLoggerAdapter } from 'src/rag/shared/application/ports/console.l
   ],
   exports: [
     RagQdrantService,
+    QdrantVectorSearchAdapter,
+    'ITextVectorSearchPort',
     QdrantTextDocumentRepository,
     QdrantImageDocumentRepository,
   ],

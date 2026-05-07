@@ -1,40 +1,45 @@
-import { ConfigService } from '@nestjs/config';
 import { Redis } from "@upstash/redis";
-import { OllamaService } from "../../infrastructure/ollama/ollama.service";
-import { RagQdrantService } from "../../infrastructure/qdrant/rag-qdrant.service";
 import { ITextDocumentRepository } from '../../domain/repositories/text-document.repository';
 import { IDeleteDocument, IDocumentWithEmbedding, IDocumentWithoutEmbedding, IGenerateAnswer, IStreamChunk, IUploadKnowledge } from '../common/interfaces/rag-documents.interfaces';
 import { TextRagPort } from "../../domain/ports/textRagPort";
 import { UploadFolderOptions } from '../commands/upload-folder.command';
-import { IKnowledgeGraphService } from '../../infrastructure/neo4j/neo4j-knowledge-graph.service';
+import { SearchMode } from '../utils/hybrid-search.util';
+import { IKnowledgeGraphPort } from "../../domain/ports/knowledge-graph.port";
 import { LoggerPort } from "../../shared/application/ports/logger.port";
 import { IConversationSessionRepository } from "../../domain/ports/conversation-session.repository.port";
 import { AskQuestionOptions } from '../commands/ask-question.command';
-import { SearchMode } from '../../infrastructure/qdrant/rag-qdrant.service';
 import { IConfidencePort } from '../../domain/ports/confidence.port';
 import { LinkService } from './link.service';
+import { CachePort } from "../../domain/ports/cache.port";
+import { IEmbeddingPort } from "../../domain/ports/embedding.port";
+import { IChatLlmPort } from "../../domain/ports/chat-llm.port";
+import type { ITextVectorSearchPort } from "../../domain/ports/text-vector-search.port";
+import type { IRagSettingsPort } from "../../domain/ports/rag-settings.port";
+import type { IRagContextFormattingPort } from "../../domain/ports/rag-context-formatting.port";
 interface RetrieveInternalOptions extends Pick<AskQuestionOptions, 'useHybridSearch' | 'useReranking' | 'rerankStrategy' | 'useQueryTransformation' | 'useContextualCompression' | 'useConversationMemory' | 'sessionId' | 'scoreThreshold' | 'filters'> {
     limit?: number;
     _searchMode?: SearchMode | 'entity';
 }
 export declare class TextRagService implements TextRagPort {
-    private readonly configService;
-    private readonly ollama;
-    private readonly qdrantService;
+    private readonly vectorSearch;
+    private readonly ragSettings;
     private readonly textRepository;
     private readonly conversationRepository;
     private readonly knowledgeGraph;
     private readonly logger;
     private readonly confidencePort;
+    private readonly embeddingPort;
+    private readonly chatLlmPort;
     private readonly linkService;
+    private readonly ragContextFormatting;
     private readonly redis;
+    private readonly cache;
     private queryTransformer;
     private reranker;
     private hybridSearch;
     private contextualCompressor;
     private queryClassifier;
-    private readonly classificationCache;
-    constructor(configService: ConfigService, ollama: OllamaService, qdrantService: RagQdrantService, textRepository: ITextDocumentRepository, conversationRepository: IConversationSessionRepository, knowledgeGraph: IKnowledgeGraphService, logger: LoggerPort, confidencePort: IConfidencePort, linkService: LinkService, redis: Redis);
+    constructor(vectorSearch: ITextVectorSearchPort, ragSettings: IRagSettingsPort, textRepository: ITextDocumentRepository, conversationRepository: IConversationSessionRepository, knowledgeGraph: IKnowledgeGraphPort, logger: LoggerPort, confidencePort: IConfidencePort, embeddingPort: IEmbeddingPort, chatLlmPort: IChatLlmPort, linkService: LinkService, ragContextFormatting: IRagContextFormattingPort, redis: Redis, cache: CachePort);
     uploadKnowledgeFromFile(file: Express.Multer.File, options?: UploadFolderOptions): Promise<IUploadKnowledge>;
     uploadMarkdownFolder(files: Express.Multer.File[], options?: UploadFolderOptions): Promise<{
         totalChunks: number;
@@ -56,6 +61,14 @@ export declare class TextRagService implements TextRagPort {
     private buildFileId;
     private classifyQuery;
     retrieve(query: string, limit?: number, options?: RetrieveInternalOptions): Promise<Array<IDocumentWithEmbedding> | string>;
+    private extractFallbackKeywords;
+    private buildMetadataFilter;
+    private normalizeCacheQuery;
+    private shouldUseAnswerCache;
+    private getAnswerCacheKey;
+    private getCachedAnswer;
+    private setCachedAnswer;
+    private deduplicateContextDocs;
     getAllDocuments(): Promise<IDocumentWithoutEmbedding[]>;
     private prepareGenerationContext;
     private runConfidenceCheck;
@@ -67,6 +80,7 @@ export declare class TextRagService implements TextRagPort {
     streamableGenerateAnswer(query: string, options?: AskQuestionOptions): AsyncGenerator<IStreamChunk>;
     deleteById(id: string): Promise<IDeleteDocument>;
     private trackCitations;
+    private sanitizeModelOutput;
     private findSimilarContent;
     private expandToParentContext;
     private extractKnowledgeGraph;

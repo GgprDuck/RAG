@@ -16,8 +16,8 @@ export class KnowledgeLinkPrismaRepository implements IKnowledgeLinkRepository {
   ): Promise<number> {
     if (!links.length) return 0;
 
-    // Deduplicate by URL at the application level — fetch all currently stored
-    // URLs and skip any that already exist (works regardless of DB schema constraints).
+    
+    
     const existingRows = await (this.prisma as any).knowledgeLink.findMany({
       select: { url: true },
     });
@@ -41,21 +41,13 @@ export class KnowledgeLinkPrismaRepository implements IKnowledgeLinkRepository {
         });
         saved++;
       } catch (err: any) {
-        // Race condition or unexpected constraint — skip silently
+        
       }
     }
     return saved;
   }
 
-  /**
-   * Searches by:
-   *  - keywords array overlap  (GIN index)
-   *  - label     ILIKE any keyword
-   *  - context   ILIKE any keyword
-   *  - sourceFile ILIKE any keyword
-   *
-   * Results are ranked by a relevance score and deduplicated by URL.
-   */
+  
   async findByKeywords(keywords: string[]): Promise<IKnowledgeLink[]> {
     if (!keywords.length) return [];
 

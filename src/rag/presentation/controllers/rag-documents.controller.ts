@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -16,7 +17,7 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 
 import { CommandBusPort } from '../../shared/application/ports/command-bus.port';
 import { AskQuestionCommand } from '../../application/commands/ask-question.command';
-import { AskQuestionHandler } from '../../application/handlers/ask-question.handler';
+import { AskQuestionStreamCommand } from '../../application/commands/ask-question-stream.command';
 import { UploadKnowledgeCommand } from '../../application/commands/upload-knowledge.command';
 import { DeleteDocumentCommand } from '../../application/commands/delete-document.command';
 
@@ -29,43 +30,56 @@ import { ApiResponse } from '../api-response/api-response';
 import { Meta } from '../api-response/meta';
 import { AskDto } from '../dto/ask.dto';
 import { UploadFolderCommand } from 'src/rag/application/commands/upload-folder.command';
-import { IGenerateAnswer, IUploadKnowledge, IDocumentWithoutEmbedding, IDocumentWithEmbedding } from 'src/rag/application/common/interfaces/rag-documents.interfaces';
+import {
+  IGenerateAnswer,
+  IStreamChunk,
+  IUploadKnowledge,
+  IDocumentWithoutEmbedding,
+  IDocumentWithEmbedding,
+} from 'src/rag/application/common/interfaces/rag-documents.interfaces';
 import { IUploadedFile } from 'src/rag/domain/interfaces/upload-folder.interface';
 import { RetrieveDto } from '../dto/retrieve.dto';
 import { UploadFolderDto } from '../dto/upload-folder.dto';
+import { AskQuestionOptions } from 'src/rag/domain/interfaces/ask-question.interface';
 
 @Controller('rag/documents')
 export class RagDocumentsController {
   constructor(
     @Inject('CommandBus') private readonly commandBus: CommandBusPort,
-    private readonly askQuestionHandler: AskQuestionHandler,
   ) {}
+
+  private buildAskOptions(dto: AskDto): AskQuestionOptions {
+    return {
+      limit:                       dto.limit,
+      scoreThreshold:              dto.scoreThreshold,
+      filters:                     dto.filters,
+      useHybridSearch:             dto.options?.useHybridSearch,
+      useReranking:                dto.options?.useReranking,
+      rerankStrategy:              dto.options?.rerankStrategy ?? dto.rerankStrategy,
+      useQueryTransformation:      dto.options?.useQueryTransformation,
+      useContextualCompression:    dto.options?.useContextualCompression,
+      useConversationMemory:       dto.options?.useConversationMemory,
+      useCitationTracking:         dto.options?.useCitationTracking,
+      includeRetrievalDiagnostics: dto.options?.includeRetrievalDiagnostics,
+      useAnswerCache:              dto.options?.useAnswerCache,
+      useKnowledgeGraph:           dto.options?.useKnowledgeGraph,
+      temperature:                 dto.temperature,
+      topP:                        dto.topP,
+      topK:                        dto.topK,
+      maxTokens:                   dto.maxTokens,
+      includeSources:              dto.includeSources,
+      sessionId:                   dto.options?.sessionId,
+      conversationHistory:         dto.conversationHistory,
+    };
+  }
 
   @Post('ask')
   async askQuestion(
     @Body() dto: AskDto,
   ): Promise<ApiResponse<IGenerateAnswer>> {
-    const command = new AskQuestionCommand(dto.question, {
-      limit:                    dto.limit,
-      scoreThreshold:           dto.scoreThreshold,
-      useHybridSearch:          dto.options?.useHybridSearch,
-      useReranking:             dto.options?.useReranking,
-      rerankStrategy:           dto.rerankStrategy,
-      useQueryTransformation:   dto.options?.useQueryTransformation,
-      useContextualCompression: dto.options?.useContextualCompression,
-      useConversationMemory:    dto.options?.useConversationMemory,
-      useCitationTracking:      dto.options?.useCitationTracking,
-      useKnowledgeGraph:        dto.options?.useKnowledgeGraph,
-      temperature:              dto.temperature,
-      topP:                     dto.topP,
-      topK:                     dto.topK,
-      maxTokens:                dto.maxTokens,
-      includeSources:           dto.includeSources,
-      sessionId:                dto.options?.sessionId,
-      conversationHistory:      dto.conversationHistory,
-    });
-
-    const answer = await this.commandBus.execute<IGenerateAnswer>(command);
+    const answer = await this.commandBus.execute<IGenerateAnswer>(
+      new AskQuestionCommand(dto.question, this.buildAskOptions(dto)),
+    );
 
     return ApiResponse.success(
       answer,
@@ -78,6 +92,10 @@ export class RagDocumentsController {
     @Body() dto: AskDto,
     @Res() res: Response,
   ): Promise<void> {
+    if (!dto.question?.trim()) {
+      throw new BadRequestException('A valid question must be provided.');
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -86,25 +104,7 @@ export class RagDocumentsController {
     res.flushHeaders();
     res.socket?.setNoDelay(true);
 
-    const command = new AskQuestionCommand(dto.question, {
-      limit:                    dto.limit,
-      scoreThreshold:           dto.scoreThreshold,
-      useHybridSearch:          dto.options?.useHybridSearch,
-      useReranking:             dto.options?.useReranking,
-      rerankStrategy:           dto.rerankStrategy,
-      useQueryTransformation:   dto.options?.useQueryTransformation,
-      useContextualCompression: dto.options?.useContextualCompression,
-      useConversationMemory:    dto.options?.useConversationMemory,
-      useCitationTracking:      dto.options?.useCitationTracking,
-      useKnowledgeGraph:        dto.options?.useKnowledgeGraph,
-      temperature:              dto.temperature,
-      topP:                     dto.topP,
-      topK:                     dto.topK,
-      maxTokens:                dto.maxTokens,
-      includeSources:           dto.includeSources,
-      sessionId:                dto.options?.sessionId,
-      conversationHistory:      dto.conversationHistory,
-    });
+    const command = new AskQuestionStreamCommand(dto.question, this.buildAskOptions(dto));
 
     const writeChunk = (chunk: object, eventName: string): void => {
       res.write(`event: ${eventName}\ndata: ${JSON.stringify(chunk)}\n\n`);
@@ -112,7 +112,8 @@ export class RagDocumentsController {
     };
 
     try {
-      for await (const chunk of this.askQuestionHandler.streamableExecute(command)) {
+      const stream = await this.commandBus.execute<AsyncGenerator<IStreamChunk>>(command);
+      for await (const chunk of stream) {
         writeChunk(chunk, chunk.event);
 
         if (chunk.event === 'done' || chunk.event === 'error') break;

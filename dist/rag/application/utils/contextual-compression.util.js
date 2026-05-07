@@ -2,8 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ContextualCompressor = void 0;
 class ContextualCompressor {
-    constructor(ollamaService) {
-        this.ollamaService = ollamaService;
+    constructor(embedding, chatLlm) {
+        this.embedding = embedding;
+        this.chatLlm = chatLlm;
     }
     async compressContext(query, documents, options = {}) {
         const { maxTokens = 500, method = 'extractive' } = options;
@@ -39,8 +40,8 @@ class ContextualCompressor {
             .slice(0, 15)
             .map((x) => x.s);
         const [queryEmbedding, ...candEmbeddings] = await Promise.all([
-            this.ollamaService.embed(query),
-            ...prescored.map((s) => this.ollamaService.embed(s.trim())),
+            this.embedding.embed(query),
+            ...prescored.map((s) => this.embedding.embed(s.trim())),
         ]);
         const reranked = prescored
             .map((s, i) => ({
@@ -79,7 +80,7 @@ class ContextualCompressor {
       ${text.slice(0, 2000)}
 
       Relevant summary:`;
-        const compressed = await this.ollamaService.getRagResponseByPrompt(prompt);
+        const compressed = await this.chatLlm.complete(prompt);
         return {
             original: text,
             compressed: compressed.trim(),

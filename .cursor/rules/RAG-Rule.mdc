@@ -1,0 +1,189 @@
+---
+alwaysApply: true
+---
+
+# RAG Demo API — Global Architecture Rules
+
+## ENFORCEMENT MODE
+These rules are STRICT and MUST be followed.
+Violations require refactor before merge.
+
+---
+
+# LAYER ARCHITECTURE
+
+## Order
+domain → application → infrastructure → presentation
+
+---
+
+## DOMAIN LAYER
+
+### MUST
+- ZERO external dependencies
+- ONLY business logic
+- ONLY entities, value objects, repository interfaces
+
+### MUST NOT
+- import application/infrastructure/presentation
+- use NestJS, ORM, HTTP, SDKs
+
+---
+
+## APPLICATION LAYER
+
+### MUST
+- implement CQRS (Command / Query / Handler)
+- use only Port interfaces
+- return DTOs only
+
+### MUST NOT
+- import infrastructure
+- contain framework logic
+- contain business rules
+
+---
+
+## INFRASTRUCTURE LAYER
+
+### MUST
+- implement Port interfaces only
+- contain all external adapters
+
+### MUST NOT
+- contain business logic
+- be used directly by application via concrete classes
+
+---
+
+## PRESENTATION LAYER
+
+### MUST
+- ONLY dispatch via CommandBus
+- ONLY validate input
+- ONLY return handler result
+
+### MUST NOT
+- contain business logic
+- inject services/repositories
+- call application/infrastructure directly
+
+---
+
+# DEPENDENCY RULES
+
+### FORBIDDEN CROSS-LAYER IMPORTS
+- domain → application ❌
+- domain → infrastructure ❌
+- application → infrastructure ❌
+- presentation → application/services ❌
+
+---
+
+# DI RULES
+
+### REQUIRED
+- inject ONLY via string tokens
+
+### FORBIDDEN
+- injecting concrete classes anywhere except infrastructure module binding
+
+---
+
+# CQRS RULES
+
+### REQUIRED
+- every operation MUST be Command or Query
+- every handler MUST expose execute()
+
+### FORBIDDEN
+- direct service calls from controllers
+- logic inside controllers
+
+---
+
+# REGISTRATION RULE
+
+### REQUIRED
+All Commands/Queries MUST be registered in:
+RagModule.onModuleInit()
+
+---
+
+### FORBIDDEN
+- unregistered handlers
+- orphan commands/queries
+
+---
+
+# INFRASTRUCTURE RULES
+
+### REQUIRED
+- one module per external system:
+  qdrant, neo4j, prisma, redis, s3, ollama
+
+### FORBIDDEN
+- shared “god module”
+- cross-service coupling
+
+---
+
+# CONFIG RULES
+
+### REQUIRED
+- all env/config values must be in ragConfig
+
+### FORBIDDEN
+- process.env outside config
+- hardcoded URLs, models, credentials
+
+---
+
+# LOGGING RULES
+
+### REQUIRED
+- use LoggerPort
+
+### FORBIDDEN
+- console.log anywhere
+
+---
+
+# LLM RULES
+
+### REQUIRED
+- all model names come from config only
+
+### FORBIDDEN
+- hardcoded model names anywhere
+
+---
+
+# PRESENTATION RULES
+
+### REQUIRED
+- controllers are pure dispatchers
+
+### FORBIDDEN
+- business logic in controllers
+- direct service injection
+
+---
+
+# SECURITY RULES
+
+### REQUIRED
+- global guards must stay enabled
+
+### FORBIDDEN
+- bypassing ThrottlerGuard
+- disabling security middleware without explicit reason
+
+---
+
+# GOLDEN RULE
+
+The Application Layer decides NOTHING.
+The Domain Layer knows EVERYTHING.
+Infrastructure DOES NOTHING but adapt.
+Presentation ONLY forwards.

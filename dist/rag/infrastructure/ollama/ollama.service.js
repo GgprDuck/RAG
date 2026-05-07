@@ -57,8 +57,18 @@ let OllamaService = class OllamaService {
             .digest('hex')}`;
         try {
             const cached = await this.cache.get(cacheKey);
-            if (cached) {
+            if (Array.isArray(cached) && cached.length > 0) {
                 return cached;
+            }
+            if (typeof cached === 'string') {
+                try {
+                    const parsed = JSON.parse(cached);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        return parsed;
+                    }
+                }
+                catch {
+                }
             }
         }
         catch (err) {
@@ -66,14 +76,19 @@ let OllamaService = class OllamaService {
         }
         try {
             const response = await axios_1.default.post(`${this.baseURL}/api/embeddings`, { model: this.textEmbedModel, prompt: safePrompt }, { timeout: this.timeout, headers: this.getHeaders() });
-            const embedding = response.data?.embedding;
+            const embedding = response.data?.embedding ??
+                response.data?.embeddings?.[0] ??
+                response.data?.data?.[0]?.embedding;
             if (!Array.isArray(embedding) || embedding.length === 0) {
-                this.logger.warn('Empty embedding, skipping chunk');
+                this.logger.warn('Empty embedding, skipping chunk', {
+                    responseKeys: response?.data && typeof response.data === 'object'
+                        ? Object.keys(response.data)
+                        : [],
+                });
                 return null;
             }
             try {
-                const value = JSON.stringify(embedding);
-                await this.cache.set(cacheKey, value, EMBED_TTL_SECONDS);
+                await this.cache.set(cacheKey, embedding, EMBED_TTL_SECONDS);
             }
             catch (err) {
                 this.logger.warn('embed: Redis set failed', { error: err?.message });

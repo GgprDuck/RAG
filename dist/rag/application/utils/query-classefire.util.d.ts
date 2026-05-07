@@ -1,5 +1,5 @@
-import { OllamaService } from '../../infrastructure/ollama/ollama.service';
-import { SearchMode } from '../../infrastructure/qdrant/rag-qdrant.service';
+import { IChatLlmPort } from "../../domain/ports/chat-llm.port";
+import type { TextVectorSearchMode as SearchMode } from "../../domain/ports/text-vector-search.port";
 export type QueryType = 'entity' | 'factual' | 'wide';
 export interface QueryClassification {
     type: QueryType;
@@ -27,8 +27,8 @@ export interface FineTuningParams {
     seed: number | undefined;
 }
 export declare class QueryClassifier {
-    private readonly ollama;
-    constructor(ollama: OllamaService);
+    private readonly chatLlm;
+    constructor(chatLlm: IChatLlmPort);
     classify(query: string): Promise<QueryClassification>;
     private build;
     private default;

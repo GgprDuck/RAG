@@ -1,4 +1,5 @@
-import { OllamaService } from '../../infrastructure/ollama/ollama.service';
+import { IChatLlmPort } from "../../domain/ports/chat-llm.port";
+import { IEmbeddingPort } from "../../domain/ports/embedding.port";
 export interface RerankedResult<T> {
     id?: string;
     text?: string;
@@ -14,8 +15,9 @@ export interface RerankableItem {
     vector?: number[];
 }
 export declare class Reranker {
-    private readonly ollamaService;
-    constructor(ollamaService: OllamaService);
+    private readonly chatLlm;
+    private readonly embedding;
+    constructor(chatLlm: IChatLlmPort, embedding: IEmbeddingPort);
     rerank<T extends RerankableItem>(query: string, results: T[], options?: {
         topK?: number;
         method?: 'llm' | 'embedding' | 'hybrid' | 'listwise';
