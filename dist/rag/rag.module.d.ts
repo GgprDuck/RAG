@@ -9,6 +9,9 @@ import { DeleteImageHandler } from './application/handlers/delete-image.handler'
 import { UploadFolderHandler } from './application/handlers/upload-folder.handler';
 import { GetAllDocumentsHandler, GetAllImagesHandler, GetImagesByKeywordHandler, RetrieveDocumentsHandler } from './application/queries/rag-query.handlers';
 import { ExtractLinksHandler } from './application/handlers/extract-links.handler';
+import { ClearAllChatsHandler, DeleteChatHandler, GetChatHandler, ListChatsHandler } from './application/handlers/chat-session.handlers';
+import { DeleteLinksBySourceFileHandler, GetAllLinksHandler, IndexLinksFilesHandler, QueryLinksHandler, SearchLinksHandler } from './application/handlers/link.handlers';
+import { CreateFeedbackHandler, ExportFeedbackHandler, ListPendingFeedbackHandler, UpdateFeedbackStatusHandler } from './application/handlers/feedback.handlers';
 export declare class RagModule implements OnModuleInit {
     private readonly bus;
     private readonly askQuestion;
@@ -23,6 +26,19 @@ export declare class RagModule implements OnModuleInit {
     private readonly getImagesByKeyword;
     private readonly retrieveDocuments;
     private readonly extractLinks;
-    constructor(bus: CommandBusPort, askQuestion: AskQuestionHandler, askQuestionStream: AskQuestionStreamHandler, uploadKnowledge: UploadKnowledgeHandler, deleteDocument: DeleteDocumentHandler, processImages: ProcessImagesHandler, deleteImage: DeleteImageHandler, uploadFolder: UploadFolderHandler, getAllDocuments: GetAllDocumentsHandler, getAllImages: GetAllImagesHandler, getImagesByKeyword: GetImagesByKeywordHandler, retrieveDocuments: RetrieveDocumentsHandler, extractLinks: ExtractLinksHandler);
+    private readonly listChats;
+    private readonly getChat;
+    private readonly deleteChatSession;
+    private readonly clearAllChats;
+    private readonly getAllLinks;
+    private readonly searchLinks;
+    private readonly queryLinks;
+    private readonly deleteLinksBySourceFile;
+    private readonly indexLinksFiles;
+    private readonly createFeedback;
+    private readonly listPendingFeedback;
+    private readonly updateFeedbackStatus;
+    private readonly exportFeedback;
+    constructor(bus: CommandBusPort, askQuestion: AskQuestionHandler, askQuestionStream: AskQuestionStreamHandler, uploadKnowledge: UploadKnowledgeHandler, deleteDocument: DeleteDocumentHandler, processImages: ProcessImagesHandler, deleteImage: DeleteImageHandler, uploadFolder: UploadFolderHandler, getAllDocuments: GetAllDocumentsHandler, getAllImages: GetAllImagesHandler, getImagesByKeyword: GetImagesByKeywordHandler, retrieveDocuments: RetrieveDocumentsHandler, extractLinks: ExtractLinksHandler, listChats: ListChatsHandler, getChat: GetChatHandler, deleteChatSession: DeleteChatHandler, clearAllChats: ClearAllChatsHandler, getAllLinks: GetAllLinksHandler, searchLinks: SearchLinksHandler, queryLinks: QueryLinksHandler, deleteLinksBySourceFile: DeleteLinksBySourceFileHandler, indexLinksFiles: IndexLinksFilesHandler, createFeedback: CreateFeedbackHandler, listPendingFeedback: ListPendingFeedbackHandler, updateFeedbackStatus: UpdateFeedbackStatusHandler, exportFeedback: ExportFeedbackHandler);
     onModuleInit(): void;
 }

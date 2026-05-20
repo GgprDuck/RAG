@@ -11,6 +11,7 @@ import {
   UploadedFile,
   UploadedFiles,
   UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
@@ -41,8 +42,12 @@ import { IUploadedFile } from 'src/rag/domain/interfaces/upload-folder.interface
 import { RetrieveDto } from '../dto/retrieve.dto';
 import { UploadFolderDto } from '../dto/upload-folder.dto';
 import { AskQuestionOptions } from 'src/rag/domain/interfaces/ask-question.interface';
+import { ApiKeyGuard } from '../guards/api-key.guard';
+import { ApiOperation, ApiResponse as ApiSwaggerResponse, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('RAG Documents')
 @Controller('rag/documents')
+@UseGuards(ApiKeyGuard)
 export class RagDocumentsController {
   constructor(
     @Inject('CommandBus') private readonly commandBus: CommandBusPort,
@@ -60,6 +65,7 @@ export class RagDocumentsController {
       useContextualCompression:    dto.options?.useContextualCompression,
       useConversationMemory:       dto.options?.useConversationMemory,
       useCitationTracking:         dto.options?.useCitationTracking,
+      includeCitationProvenance:   dto.options?.includeCitationProvenance,
       includeRetrievalDiagnostics: dto.options?.includeRetrievalDiagnostics,
       useAnswerCache:              dto.options?.useAnswerCache,
       useKnowledgeGraph:           dto.options?.useKnowledgeGraph,
@@ -74,6 +80,8 @@ export class RagDocumentsController {
   }
 
   @Post('ask')
+  @ApiOperation({ summary: 'Ask a question (non-streaming)' })
+  @ApiSwaggerResponse({ status: 200, description: 'Generated answer' })
   async askQuestion(
     @Body() dto: AskDto,
   ): Promise<ApiResponse<IGenerateAnswer>> {
@@ -88,6 +96,7 @@ export class RagDocumentsController {
   }
 
   @Post('ask/stream')
+  @ApiOperation({ summary: 'Ask a question (SSE stream)' })
   async askQuestionStream(
     @Body() dto: AskDto,
     @Res() res: Response,

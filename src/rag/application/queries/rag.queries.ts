@@ -11,18 +11,21 @@ export class GetImagesByKeywordQuery {
   ) {}
 }
 
+import { AskQuestionOptions } from 'src/rag/domain/interfaces/ask-question.interface';
+
 export class RetrieveDocumentsQuery {
   constructor(
     public readonly query: string,
     public readonly limit?: number,
-    public readonly options?: {
-      useHybridSearch?: boolean;
-      useReranking?: boolean;
-      rerankStrategy?: 'cross_encoder' | 'llm_based' | 'none';
-      useQueryTransformation?: boolean;
-      useContextualCompression?: boolean;
-      scoreThreshold?: number;
-      filters?: Array<{ field: string; value: unknown; operator?: string }>;
-    },
+    public readonly options?: Pick<
+      AskQuestionOptions,
+      | 'useHybridSearch'
+      | 'useReranking'
+      | 'rerankStrategy'
+      | 'useQueryTransformation'
+      | 'useContextualCompression'
+      | 'scoreThreshold'
+      | 'filters'
+    >,
   ) {}
 }

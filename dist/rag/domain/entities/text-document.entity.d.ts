@@ -13,7 +13,8 @@ export declare class TextDocument {
     readonly parentId?: string | undefined;
     readonly parentText?: string | undefined;
     readonly contextKeywords?: string[] | undefined;
+    readonly sectionTitle?: string | undefined;
     readonly score?: number | undefined;
-    constructor(id: string, text: string, embedding: Embedding, model: string, createdAt: Date, chunkId?: string | undefined, level?: number | undefined, startIndex?: number | undefined, endIndex?: number | undefined, childIds?: string[] | undefined, parentId?: string | undefined, parentText?: string | undefined, contextKeywords?: string[] | undefined, score?: number | undefined);
-    static create(id: string, text: string, embedding: number[], model: string, createdAt: Date, chunkId?: string, level?: number, startIndex?: number, endIndex?: number, childIds?: string[], parentId?: string, parentText?: string, contextKeywords?: string[], score?: number): TextDocument;
+    constructor(id: string, text: string, embedding: Embedding, model: string, createdAt: Date, chunkId?: string | undefined, level?: number | undefined, startIndex?: number | undefined, endIndex?: number | undefined, childIds?: string[] | undefined, parentId?: string | undefined, parentText?: string | undefined, contextKeywords?: string[] | undefined, sectionTitle?: string | undefined, score?: number | undefined);
+    static create(id: string, text: string, embedding: number[], model: string, createdAt: Date, chunkId?: string, level?: number, startIndex?: number, endIndex?: number, childIds?: string[], parentId?: string, parentText?: string, contextKeywords?: string[], sectionTitle?: string, score?: number): TextDocument;
 }

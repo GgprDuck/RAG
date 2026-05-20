@@ -19,6 +19,7 @@ export class TextDocumentQdrantMapper {
         parentId: doc.parentId,
         parentText: doc.parentText,
         contextKeywords: doc.contextKeywords,
+        sectionTitle: doc.sectionTitle,
       },
     };
   }
@@ -50,6 +51,7 @@ export class TextDocumentQdrantMapper {
       payload?.parentId   ? String(payload.parentId)   : undefined,
       payload?.parentText ? String(payload.parentText)  : undefined,
       Array.isArray(payload?.contextKeywords) ? payload.contextKeywords as string[] : undefined,
+      payload?.sectionTitle ? String(payload.sectionTitle) : undefined,
     );
   }
 }

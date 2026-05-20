@@ -26,6 +26,8 @@ const ask_dto_1 = require("../dto/ask.dto");
 const upload_folder_command_1 = require("../../application/commands/upload-folder.command");
 const retrieve_dto_1 = require("../dto/retrieve.dto");
 const upload_folder_dto_1 = require("../dto/upload-folder.dto");
+const api_key_guard_1 = require("../guards/api-key.guard");
+const swagger_1 = require("@nestjs/swagger");
 let RagDocumentsController = class RagDocumentsController {
     constructor(commandBus) {
         this.commandBus = commandBus;
@@ -42,6 +44,7 @@ let RagDocumentsController = class RagDocumentsController {
             useContextualCompression: dto.options?.useContextualCompression,
             useConversationMemory: dto.options?.useConversationMemory,
             useCitationTracking: dto.options?.useCitationTracking,
+            includeCitationProvenance: dto.options?.includeCitationProvenance,
             includeRetrievalDiagnostics: dto.options?.includeRetrievalDiagnostics,
             useAnswerCache: dto.options?.useAnswerCache,
             useKnowledgeGraph: dto.options?.useKnowledgeGraph,
@@ -151,6 +154,8 @@ let RagDocumentsController = class RagDocumentsController {
 exports.RagDocumentsController = RagDocumentsController;
 __decorate([
     (0, common_1.Post)('ask'),
+    (0, swagger_1.ApiOperation)({ summary: 'Ask a question (non-streaming)' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Generated answer' }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [ask_dto_1.AskDto]),
@@ -158,6 +163,7 @@ __decorate([
 ], RagDocumentsController.prototype, "askQuestion", null);
 __decorate([
     (0, common_1.Post)('ask/stream'),
+    (0, swagger_1.ApiOperation)({ summary: 'Ask a question (SSE stream)' }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Res)()),
     __metadata("design:type", Function),
@@ -207,7 +213,9 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], RagDocumentsController.prototype, "retrieve", null);
 exports.RagDocumentsController = RagDocumentsController = __decorate([
+    (0, swagger_1.ApiTags)('RAG Documents'),
     (0, common_1.Controller)('rag/documents'),
+    (0, common_1.UseGuards)(api_key_guard_1.ApiKeyGuard),
     __param(0, (0, common_1.Inject)('CommandBus')),
     __metadata("design:paramtypes", [Object])
 ], RagDocumentsController);

@@ -10,7 +10,7 @@ export interface AskQuestionOptions {
         operator?: string;
     }>;
     useReranking?: boolean;
-    rerankStrategy?: 'cross_encoder' | 'llm_based' | 'none' | 'hybrid';
+    rerankStrategy?: 'listwise_llm' | 'cross_encoder' | 'llm_based' | 'none' | 'hybrid';
     useContextualCompression?: boolean;
     useConversationMemory?: boolean;
     conversationHistory?: Array<{
@@ -22,6 +22,7 @@ export interface AskQuestionOptions {
     sessionId?: string;
     useKnowledgeGraph?: boolean;
     useCitationTracking?: boolean;
+    includeCitationProvenance?: boolean;
     includeSources?: boolean;
     includeRetrievalDiagnostics?: boolean;
     useAnswerCache?: boolean;

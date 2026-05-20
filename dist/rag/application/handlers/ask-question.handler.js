@@ -15,10 +15,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AskQuestionHandler = void 0;
 const common_1 = require("@nestjs/common");
 let AskQuestionHandler = class AskQuestionHandler {
-    constructor(textRag, logger, confidencePort) {
+    constructor(textRag, logger) {
         this.textRag = textRag;
         this.logger = logger;
-        this.confidencePort = confidencePort;
     }
     async execute(cmd) {
         if (!cmd.question || typeof cmd.question !== 'string' || !cmd.question.trim()) {
@@ -71,61 +70,7 @@ let AskQuestionHandler = class AskQuestionHandler {
         if (typeof raw === 'string') {
             return { answer: raw };
         }
-        const chunks = (raw.sources?.length ? raw.sources : (raw.citations ?? []))
-            .map((s) => s.text)
-            .filter(Boolean);
-        const verification = await this.confidencePort.verify(raw.answer, chunks);
-        this.logger.log('AskQuestion_Confidence', {
-            score: verification.confidence.score,
-            tier: verification.confidence.tier,
-            grounded: verification.grounded,
-            llmVerificationUsed: verification.llmVerificationUsed,
-            llmVerdict: verification.llmVerdict,
-        });
-        let finalAnswer = raw.answer;
-        if (!verification.grounded && verification.llmVerdict === 'NO') {
-            finalAnswer = 'Немає релевантної відповіді';
-        }
-        return {
-            ...raw,
-            confidence: verification.confidence.score,
-            formattedAnswer: finalAnswer,
-        };
-    }
-    streamableExecute(cmd) {
-        if (!cmd.question || typeof cmd.question !== 'string' || !cmd.question.trim()) {
-            this.logger.log('AskQuestion_Stream_Invalid', { q: cmd.question });
-            return (async function* () {
-                yield { event: 'error', error: 'A valid question must be provided.' };
-            })();
-        }
-        const opts = cmd.options;
-        this.logger.log('AskQuestion_Stream', {
-            q: cmd.question,
-            hasFilters: (opts?.filters?.length ?? 0) > 0,
-        });
-        return this.textRag.streamableGenerateAnswer(cmd.question, {
-            limit: opts?.limit,
-            scoreThreshold: opts?.scoreThreshold,
-            filters: opts?.filters,
-            useHybridSearch: opts?.useHybridSearch,
-            useReranking: opts?.useReranking,
-            rerankStrategy: opts?.rerankStrategy,
-            useQueryTransformation: opts?.useQueryTransformation,
-            useContextualCompression: opts?.useContextualCompression,
-            useConversationMemory: opts?.useConversationMemory,
-            useCitationTracking: opts?.useCitationTracking,
-            includeRetrievalDiagnostics: opts?.includeRetrievalDiagnostics,
-            useAnswerCache: opts?.useAnswerCache,
-            useKnowledgeGraph: opts?.useKnowledgeGraph,
-            temperature: opts?.temperature,
-            topP: opts?.topP,
-            topK: opts?.topK,
-            maxTokens: opts?.maxTokens,
-            includeSources: opts?.includeSources,
-            sessionId: opts?.sessionId,
-            conversationHistory: opts?.conversationHistory,
-        });
+        return raw;
     }
 };
 exports.AskQuestionHandler = AskQuestionHandler;
@@ -133,7 +78,6 @@ exports.AskQuestionHandler = AskQuestionHandler = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, common_1.Inject)('TextRagPort')),
     __param(1, (0, common_1.Inject)('LoggerPort')),
-    __param(2, (0, common_1.Inject)('IConfidencePort')),
-    __metadata("design:paramtypes", [Object, Object, Object])
+    __metadata("design:paramtypes", [Object, Object])
 ], AskQuestionHandler);
 //# sourceMappingURL=ask-question.handler.js.map

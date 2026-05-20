@@ -20,8 +20,11 @@ import { Type } from 'class-transformer';
 
 export enum RerankStrategy {
   NONE = 'none',
+  /** @deprecated Use LISTWISE_LLM */
   CROSS_ENCODER = 'cross_encoder',
+  LISTWISE_LLM = 'listwise_llm',
   LLM_BASED = 'llm_based',
+  HYBRID = 'hybrid',
 }
 
 export class ConversationMessage {
@@ -103,6 +106,11 @@ export class AdvancedRagOptionsDto {
   @IsOptional()
   @IsBoolean()
   useCitationTracking?: boolean;
+
+  @ApiPropertyOptional({ default: true, description: 'Include citation provenance details (chunk/version offsets when available)' })
+  @IsOptional()
+  @IsBoolean()
+  includeCitationProvenance?: boolean;
 
   @ApiPropertyOptional({ default: false, description: 'Include retrieval diagnostics in response metadata' })
   @IsOptional()

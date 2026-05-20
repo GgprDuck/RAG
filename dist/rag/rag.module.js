@@ -46,21 +46,35 @@ const upload_folder_command_1 = require("./application/commands/upload-folder.co
 const rag_queries_1 = require("./application/queries/rag.queries");
 const rag_documents_controller_1 = require("./presentation/controllers/rag-documents.controller");
 const image_controller_1 = require("./presentation/controllers/image.controller");
-const console_logger_adapter_1 = require("./shared/application/ports/console.logger.adapter");
 const langchain_chat_adapter_1 = require("./infrastructure/langchain/langchain-chat.adapter");
 const langchain_embedding_adapter_1 = require("./infrastructure/langchain/langchain-embedding.adapter");
 const langchain_retriever_adapter_1 = require("./infrastructure/langchain/langchain-retriever.adapter");
 const confidence_service_1 = require("./application/services/confidence.service");
 const link_service_1 = require("./application/services/link.service");
 const chat_controller_1 = require("./presentation/controllers/chat.controller");
-const knowledge_link_prisma_repository_1 = require("./domain/repositories/knowledge-link-prisma.repository");
+const knowledge_link_prisma_repository_1 = require("./infrastructure/prisma/repositories/knowledge-link-prisma.repository");
+const rag_cache_service_1 = require("./application/services/rag-cache.service");
+const rag_ingest_service_1 = require("./application/services/rag-ingest.service");
+const structured_rag_tracing_adapter_1 = require("./infrastructure/observability/structured-rag-tracing.adapter");
 const link_controller_1 = require("./presentation/controllers/link.controller");
 const extract_links_handler_1 = require("./application/handlers/extract-links.handler");
 const extract_links_command_1 = require("./application/commands/extract-links.command");
 const cache_module_1 = require("./infrastructure/redis/cache.module");
 const rag_settings_adapter_1 = require("./infrastructure/config/rag-settings.adapter");
+const structured_logger_adapter_1 = require("./shared/application/ports/structured.logger.adapter");
+const routing_chat_adapter_1 = require("./infrastructure/langchain/routing-chat.adapter");
+const ollama_chat_adapter_1 = require("./infrastructure/ollama/ollama-chat.adapter");
+const chat_session_commands_1 = require("./application/commands/chat-session.commands");
+const chat_session_handlers_1 = require("./application/handlers/chat-session.handlers");
+const link_commands_1 = require("./application/commands/link.commands");
+const link_handlers_1 = require("./application/handlers/link.handlers");
+const api_key_guard_1 = require("./presentation/guards/api-key.guard");
+const feedback_commands_1 = require("./application/commands/feedback.commands");
+const feedback_handlers_1 = require("./application/handlers/feedback.handlers");
+const feedback_commands_2 = require("./application/commands/feedback.commands");
+const feedback_controller_1 = require("./presentation/controllers/feedback.controller");
 let RagModule = class RagModule {
-    constructor(bus, askQuestion, askQuestionStream, uploadKnowledge, deleteDocument, processImages, deleteImage, uploadFolder, getAllDocuments, getAllImages, getImagesByKeyword, retrieveDocuments, extractLinks) {
+    constructor(bus, askQuestion, askQuestionStream, uploadKnowledge, deleteDocument, processImages, deleteImage, uploadFolder, getAllDocuments, getAllImages, getImagesByKeyword, retrieveDocuments, extractLinks, listChats, getChat, deleteChatSession, clearAllChats, getAllLinks, searchLinks, queryLinks, deleteLinksBySourceFile, indexLinksFiles, createFeedback, listPendingFeedback, updateFeedbackStatus, exportFeedback) {
         this.bus = bus;
         this.askQuestion = askQuestion;
         this.askQuestionStream = askQuestionStream;
@@ -74,6 +88,19 @@ let RagModule = class RagModule {
         this.getImagesByKeyword = getImagesByKeyword;
         this.retrieveDocuments = retrieveDocuments;
         this.extractLinks = extractLinks;
+        this.listChats = listChats;
+        this.getChat = getChat;
+        this.deleteChatSession = deleteChatSession;
+        this.clearAllChats = clearAllChats;
+        this.getAllLinks = getAllLinks;
+        this.searchLinks = searchLinks;
+        this.queryLinks = queryLinks;
+        this.deleteLinksBySourceFile = deleteLinksBySourceFile;
+        this.indexLinksFiles = indexLinksFiles;
+        this.createFeedback = createFeedback;
+        this.listPendingFeedback = listPendingFeedback;
+        this.updateFeedbackStatus = updateFeedbackStatus;
+        this.exportFeedback = exportFeedback;
     }
     onModuleInit() {
         this.bus.register(ask_question_command_1.AskQuestionCommand, this.askQuestion);
@@ -88,6 +115,19 @@ let RagModule = class RagModule {
         this.bus.register(rag_queries_1.GetImagesByKeywordQuery, this.getImagesByKeyword);
         this.bus.register(rag_queries_1.RetrieveDocumentsQuery, this.retrieveDocuments);
         this.bus.register(extract_links_command_1.IndexLinksCommand, this.extractLinks);
+        this.bus.register(chat_session_commands_1.ListChatsQuery, this.listChats);
+        this.bus.register(chat_session_commands_1.GetChatQuery, this.getChat);
+        this.bus.register(chat_session_commands_1.DeleteChatCommand, this.deleteChatSession);
+        this.bus.register(chat_session_commands_1.ClearAllChatsCommand, this.clearAllChats);
+        this.bus.register(link_commands_1.GetAllLinksQuery, this.getAllLinks);
+        this.bus.register(link_commands_1.SearchLinksQuery, this.searchLinks);
+        this.bus.register(link_commands_1.QueryLinksQuery, this.queryLinks);
+        this.bus.register(link_commands_1.DeleteLinksBySourceFileCommand, this.deleteLinksBySourceFile);
+        this.bus.register(link_commands_1.IndexLinksFilesCommand, this.indexLinksFiles);
+        this.bus.register(feedback_commands_1.CreateFeedbackCommand, this.createFeedback);
+        this.bus.register(feedback_commands_1.ListPendingFeedbackQuery, this.listPendingFeedback);
+        this.bus.register(feedback_commands_1.UpdateFeedbackStatusCommand, this.updateFeedbackStatus);
+        this.bus.register(feedback_commands_2.ExportFeedbackQuery, this.exportFeedback);
     }
 };
 exports.RagModule = RagModule;
@@ -109,9 +149,15 @@ exports.RagModule = RagModule = __decorate([
             langchain_retriever_adapter_1.LangChainRetrieverAdapter,
             { provide: 'IRagSettingsPort', useExisting: rag_settings_adapter_1.RagSettingsAdapter },
             { provide: 'IRagContextFormattingPort', useExisting: langchain_retriever_adapter_1.LangChainRetrieverAdapter },
-            { provide: 'LoggerPort', useClass: console_logger_adapter_1.ConsoleLoggerAdapter },
+            { provide: 'LoggerPort', useClass: structured_logger_adapter_1.StructuredLoggerAdapter },
+            { provide: 'IRagTracingPort', useClass: structured_rag_tracing_adapter_1.StructuredRagTracingAdapter },
+            rag_cache_service_1.RagCacheService,
+            rag_ingest_service_1.RagIngestService,
+            structured_rag_tracing_adapter_1.StructuredRagTracingAdapter,
             { provide: 'IEmbeddingPort', useClass: langchain_embedding_adapter_1.LangChainEmbeddingAdapter },
-            { provide: 'IChatLlmPort', useClass: langchain_chat_adapter_1.LangChainChatAdapter },
+            { provide: 'PrimaryChatLlmPort', useClass: langchain_chat_adapter_1.LangChainChatAdapter },
+            { provide: 'SecondaryChatLlmPort', useClass: ollama_chat_adapter_1.OllamaChatAdapter },
+            { provide: 'IChatLlmPort', useClass: routing_chat_adapter_1.RoutingChatAdapter },
             { provide: 'ITextDocumentRepository', useExisting: qdrant_text_document_repository_1.QdrantTextDocumentRepository },
             { provide: 'IImageDocumentRepository', useExisting: qdrant_image_document_repository_1.QdrantImageDocumentRepository },
             { provide: 'IStoragePort', useExisting: s3_storage_service_1.S3StorageService },
@@ -134,12 +180,27 @@ exports.RagModule = RagModule = __decorate([
             rag_query_handlers_1.GetImagesByKeywordHandler,
             rag_query_handlers_1.RetrieveDocumentsHandler,
             extract_links_handler_1.ExtractLinksHandler,
+            api_key_guard_1.ApiKeyGuard,
+            chat_session_handlers_1.ListChatsHandler,
+            chat_session_handlers_1.GetChatHandler,
+            chat_session_handlers_1.DeleteChatHandler,
+            chat_session_handlers_1.ClearAllChatsHandler,
+            link_handlers_1.GetAllLinksHandler,
+            link_handlers_1.SearchLinksHandler,
+            link_handlers_1.QueryLinksHandler,
+            link_handlers_1.DeleteLinksBySourceFileHandler,
+            link_handlers_1.IndexLinksFilesHandler,
+            feedback_handlers_1.CreateFeedbackHandler,
+            feedback_handlers_1.ListPendingFeedbackHandler,
+            feedback_handlers_1.UpdateFeedbackStatusHandler,
+            feedback_handlers_1.ExportFeedbackHandler,
         ],
         controllers: [
             rag_documents_controller_1.RagDocumentsController,
             image_controller_1.RagImagesController,
             chat_controller_1.ChatController,
             link_controller_1.LinksController,
+            feedback_controller_1.FeedbackController,
         ],
     }),
     __param(0, (0, common_1.Inject)('CommandBus')),
@@ -154,6 +215,19 @@ exports.RagModule = RagModule = __decorate([
         rag_query_handlers_1.GetAllImagesHandler,
         rag_query_handlers_1.GetImagesByKeywordHandler,
         rag_query_handlers_1.RetrieveDocumentsHandler,
-        extract_links_handler_1.ExtractLinksHandler])
+        extract_links_handler_1.ExtractLinksHandler,
+        chat_session_handlers_1.ListChatsHandler,
+        chat_session_handlers_1.GetChatHandler,
+        chat_session_handlers_1.DeleteChatHandler,
+        chat_session_handlers_1.ClearAllChatsHandler,
+        link_handlers_1.GetAllLinksHandler,
+        link_handlers_1.SearchLinksHandler,
+        link_handlers_1.QueryLinksHandler,
+        link_handlers_1.DeleteLinksBySourceFileHandler,
+        link_handlers_1.IndexLinksFilesHandler,
+        feedback_handlers_1.CreateFeedbackHandler,
+        feedback_handlers_1.ListPendingFeedbackHandler,
+        feedback_handlers_1.UpdateFeedbackStatusHandler,
+        feedback_handlers_1.ExportFeedbackHandler])
 ], RagModule);
 //# sourceMappingURL=rag.module.js.map

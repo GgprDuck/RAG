@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { AllExceptionsFilter } from './rag/shared/nest/filters/all-exeption.filter';
 import helmet from 'helmet';
+import { randomUUID } from 'crypto';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -22,9 +23,16 @@ async function bootstrap() {
 
   const server = app.getHttpServer();
 
-  server.setTimeout(0);
-  server.keepAliveTimeout = 0;
-  server.headersTimeout = 0;
+  server.setTimeout(30_000);
+  server.keepAliveTimeout = 15_000;
+  server.headersTimeout = 20_000;
+
+  app.use((req: any, res: any, next: () => void) => {
+    const requestId = req.headers['x-request-id'] || randomUUID();
+    res.setHeader('X-Request-Id', requestId);
+    req.requestId = requestId;
+    next();
+  });
 
   const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',')
@@ -56,6 +64,10 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api', app, document);
   }
+
+  app.getHttpAdapter().get('/health', (_req: any, res: any) => {
+    res.status(200).json({ status: 'ok' });
+  });
 
   await app.listen(3000);
   Logger.log('RAG demo running on http://localhost:3000', 'Bootstrap');

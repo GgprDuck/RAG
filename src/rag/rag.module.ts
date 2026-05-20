@@ -42,19 +42,64 @@ import {
 } from './application/queries/rag.queries';
 import { RagDocumentsController } from './presentation/controllers/rag-documents.controller';
 import { RagImagesController } from './presentation/controllers/image.controller';
-import { ConsoleLoggerAdapter } from './shared/application/ports/console.logger.adapter';
 import { LangChainChatAdapter } from './infrastructure/langchain/langchain-chat.adapter';
 import { LangChainEmbeddingAdapter } from './infrastructure/langchain/langchain-embedding.adapter';
 import { LangChainRetrieverAdapter } from './infrastructure/langchain/langchain-retriever.adapter';
 import { ConfidenceService } from './application/services/confidence.service';
 import { LinkService } from './application/services/link.service';
 import { ChatController } from './presentation/controllers/chat.controller';
-import { KnowledgeLinkPrismaRepository } from './domain/repositories/knowledge-link-prisma.repository';
+import { KnowledgeLinkPrismaRepository } from './infrastructure/prisma/repositories/knowledge-link-prisma.repository';
+import { RagCacheService } from './application/services/rag-cache.service';
+import { RagIngestService } from './application/services/rag-ingest.service';
+import { StructuredRagTracingAdapter } from './infrastructure/observability/structured-rag-tracing.adapter';
 import { LinksController } from './presentation/controllers/link.controller';
 import { ExtractLinksHandler } from './application/handlers/extract-links.handler';
 import { IndexLinksCommand } from './application/commands/extract-links.command';
 import { CacheModule } from './infrastructure/redis/cache.module';
 import { RagSettingsAdapter } from './infrastructure/config/rag-settings.adapter';
+import { StructuredLoggerAdapter } from './shared/application/ports/structured.logger.adapter';
+import { RoutingChatAdapter } from './infrastructure/langchain/routing-chat.adapter';
+import { OllamaChatAdapter } from './infrastructure/ollama/ollama-chat.adapter';
+import {
+  ClearAllChatsCommand,
+  DeleteChatCommand,
+  GetChatQuery,
+  ListChatsQuery,
+} from './application/commands/chat-session.commands';
+import {
+  ClearAllChatsHandler,
+  DeleteChatHandler,
+  GetChatHandler,
+  ListChatsHandler,
+} from './application/handlers/chat-session.handlers';
+import {
+  DeleteLinksBySourceFileCommand,
+  GetAllLinksQuery,
+  IndexLinksFilesCommand,
+  QueryLinksQuery,
+  SearchLinksQuery,
+} from './application/commands/link.commands';
+import {
+  DeleteLinksBySourceFileHandler,
+  GetAllLinksHandler,
+  IndexLinksFilesHandler,
+  QueryLinksHandler,
+  SearchLinksHandler,
+} from './application/handlers/link.handlers';
+import { ApiKeyGuard } from './presentation/guards/api-key.guard';
+import {
+  CreateFeedbackCommand,
+  ListPendingFeedbackQuery,
+  UpdateFeedbackStatusCommand,
+} from './application/commands/feedback.commands';
+import {
+  CreateFeedbackHandler,
+  ExportFeedbackHandler,
+  ListPendingFeedbackHandler,
+  UpdateFeedbackStatusHandler,
+} from './application/handlers/feedback.handlers';
+import { ExportFeedbackQuery } from './application/commands/feedback.commands';
+import { FeedbackController } from './presentation/controllers/feedback.controller';
 
 @Module({
   imports: [
@@ -73,9 +118,15 @@ import { RagSettingsAdapter } from './infrastructure/config/rag-settings.adapter
     LangChainRetrieverAdapter,
     { provide: 'IRagSettingsPort',          useExisting: RagSettingsAdapter },
     { provide: 'IRagContextFormattingPort', useExisting: LangChainRetrieverAdapter },
-    { provide: 'LoggerPort',               useClass: ConsoleLoggerAdapter },
+    { provide: 'LoggerPort',               useClass: StructuredLoggerAdapter },
+    { provide: 'IRagTracingPort',          useClass: StructuredRagTracingAdapter },
+    RagCacheService,
+    RagIngestService,
+    StructuredRagTracingAdapter,
     { provide: 'IEmbeddingPort',           useClass: LangChainEmbeddingAdapter },
-    { provide: 'IChatLlmPort',             useClass: LangChainChatAdapter },
+    { provide: 'PrimaryChatLlmPort',       useClass: LangChainChatAdapter },
+    { provide: 'SecondaryChatLlmPort',     useClass: OllamaChatAdapter },
+    { provide: 'IChatLlmPort',             useClass: RoutingChatAdapter },
     { provide: 'ITextDocumentRepository',  useExisting: QdrantTextDocumentRepository },
     { provide: 'IImageDocumentRepository', useExisting: QdrantImageDocumentRepository },
     { provide: 'IStoragePort',             useExisting: S3StorageService },
@@ -98,12 +149,27 @@ import { RagSettingsAdapter } from './infrastructure/config/rag-settings.adapter
     GetImagesByKeywordHandler,
     RetrieveDocumentsHandler,
     ExtractLinksHandler,
+    ApiKeyGuard,
+    ListChatsHandler,
+    GetChatHandler,
+    DeleteChatHandler,
+    ClearAllChatsHandler,
+    GetAllLinksHandler,
+    SearchLinksHandler,
+    QueryLinksHandler,
+    DeleteLinksBySourceFileHandler,
+    IndexLinksFilesHandler,
+    CreateFeedbackHandler,
+    ListPendingFeedbackHandler,
+    UpdateFeedbackStatusHandler,
+    ExportFeedbackHandler,
   ],
   controllers: [
     RagDocumentsController,
     RagImagesController,
     ChatController,
     LinksController,
+    FeedbackController,
   ],
 })
 export class RagModule implements OnModuleInit {
@@ -121,6 +187,19 @@ export class RagModule implements OnModuleInit {
     private readonly getImagesByKeyword: GetImagesByKeywordHandler,
     private readonly retrieveDocuments: RetrieveDocumentsHandler,
     private readonly extractLinks: ExtractLinksHandler,
+    private readonly listChats: ListChatsHandler,
+    private readonly getChat: GetChatHandler,
+    private readonly deleteChatSession: DeleteChatHandler,
+    private readonly clearAllChats: ClearAllChatsHandler,
+    private readonly getAllLinks: GetAllLinksHandler,
+    private readonly searchLinks: SearchLinksHandler,
+    private readonly queryLinks: QueryLinksHandler,
+    private readonly deleteLinksBySourceFile: DeleteLinksBySourceFileHandler,
+    private readonly indexLinksFiles: IndexLinksFilesHandler,
+    private readonly createFeedback: CreateFeedbackHandler,
+    private readonly listPendingFeedback: ListPendingFeedbackHandler,
+    private readonly updateFeedbackStatus: UpdateFeedbackStatusHandler,
+    private readonly exportFeedback: ExportFeedbackHandler,
   ) {}
 
   onModuleInit(): void {
@@ -136,5 +215,18 @@ export class RagModule implements OnModuleInit {
     this.bus.register(GetImagesByKeywordQuery, this.getImagesByKeyword);
     this.bus.register(RetrieveDocumentsQuery,  this.retrieveDocuments);
     this.bus.register(IndexLinksCommand,       this.extractLinks);
+    this.bus.register(ListChatsQuery,          this.listChats);
+    this.bus.register(GetChatQuery,            this.getChat);
+    this.bus.register(DeleteChatCommand,       this.deleteChatSession);
+    this.bus.register(ClearAllChatsCommand,    this.clearAllChats);
+    this.bus.register(GetAllLinksQuery,        this.getAllLinks);
+    this.bus.register(SearchLinksQuery,        this.searchLinks);
+    this.bus.register(QueryLinksQuery,         this.queryLinks);
+    this.bus.register(DeleteLinksBySourceFileCommand, this.deleteLinksBySourceFile);
+    this.bus.register(IndexLinksFilesCommand,  this.indexLinksFiles);
+    this.bus.register(CreateFeedbackCommand, this.createFeedback);
+    this.bus.register(ListPendingFeedbackQuery, this.listPendingFeedback);
+    this.bus.register(UpdateFeedbackStatusCommand, this.updateFeedbackStatus);
+    this.bus.register(ExportFeedbackQuery, this.exportFeedback);
   }
 }

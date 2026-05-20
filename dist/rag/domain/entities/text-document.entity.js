@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TextDocument = void 0;
 const embedding_vo_1 = require("../value-objects/embedding.vo");
 class TextDocument {
-    constructor(id, text, embedding, model, createdAt, chunkId, level, startIndex, endIndex, childIds, parentId, parentText, contextKeywords, score) {
+    constructor(id, text, embedding, model, createdAt, chunkId, level, startIndex, endIndex, childIds, parentId, parentText, contextKeywords, sectionTitle, score) {
         this.id = id;
         this.text = text;
         this.embedding = embedding;
@@ -17,10 +17,11 @@ class TextDocument {
         this.parentId = parentId;
         this.parentText = parentText;
         this.contextKeywords = contextKeywords;
+        this.sectionTitle = sectionTitle;
         this.score = score;
     }
-    static create(id, text, embedding, model, createdAt, chunkId, level, startIndex, endIndex, childIds, parentId, parentText, contextKeywords, score) {
-        return new TextDocument(id, text, new embedding_vo_1.Embedding(embedding), model, createdAt, chunkId, level, startIndex, endIndex, childIds, parentId, parentText, contextKeywords, score);
+    static create(id, text, embedding, model, createdAt, chunkId, level, startIndex, endIndex, childIds, parentId, parentText, contextKeywords, sectionTitle, score) {
+        return new TextDocument(id, text, new embedding_vo_1.Embedding(embedding), model, createdAt, chunkId, level, startIndex, endIndex, childIds, parentId, parentText, contextKeywords, sectionTitle, score);
     }
 }
 exports.TextDocument = TextDocument;

@@ -25,5 +25,6 @@ export declare class HybridSearchEngine {
         minTextLength?: number;
         originalQuery?: string;
         filter?: unknown;
+        keywordScrollLimit?: number;
     }): Promise<HybridSearchResult[] | null>;
 }

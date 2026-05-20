@@ -14,11 +14,10 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LinksController = void 0;
 const common_1 = require("@nestjs/common");
-const link_service_1 = require("../../application/services/link.service");
 const platform_express_1 = require("@nestjs/platform-express");
 const multer_1 = require("multer");
-const extract_links_handler_1 = require("../../application/handlers/extract-links.handler");
-const extract_links_command_1 = require("../../application/commands/extract-links.command");
+const link_commands_1 = require("../../application/commands/link.commands");
+const api_key_guard_1 = require("../guards/api-key.guard");
 const mdFilesInterceptor = () => (0, platform_express_1.FilesInterceptor)('files', 10_000, {
     storage: (0, multer_1.memoryStorage)(),
     fileFilter: (_req, file, cb) => {
@@ -27,66 +26,24 @@ const mdFilesInterceptor = () => (0, platform_express_1.FilesInterceptor)('files
     },
 });
 let LinksController = class LinksController {
-    constructor(linkService, repo, logger, handler) {
-        this.linkService = linkService;
-        this.repo = repo;
-        this.logger = logger;
-        this.handler = handler;
+    constructor(commandBus) {
+        this.commandBus = commandBus;
     }
     async getAllLinks(sourceFile) {
-        let links = await this.repo.findAll();
-        if (sourceFile) {
-            links = links.filter(l => l.sourceFile === sourceFile);
-        }
-        this.logger.log('LinksController.getAllLinks', {
-            sourceFile: sourceFile ?? 'all',
-            total: links.length,
-        });
-        return { total: links.length, links };
+        return this.commandBus.execute(new link_commands_1.GetAllLinksQuery(sourceFile));
     }
     async searchLinks(q) {
-        if (!q || !q.trim()) {
+        if (!q)
             throw new common_1.BadRequestException('Query param "q" is required');
-        }
-        const result = await this.linkService.findLinksForContext(q.trim());
-        this.logger.log('LinksController.searchLinks', {
-            q,
-            found: result.found,
-            total: result.links.length,
-        });
-        return {
-            query: q.trim(),
-            total: result.links.length,
-            links: result.links,
-            block: result.block,
-        };
+        return this.commandBus.execute(new link_commands_1.SearchLinksQuery(q));
     }
     async queryLinks(q) {
-        if (!q || !q.trim()) {
+        if (!q)
             throw new common_1.BadRequestException('Query param "q" is required');
-        }
-        const result = await this.linkService.findLinksForQuery(q.trim());
-        if (!result.found) {
-            throw new common_1.NotFoundException('Query does not appear to be link-related. Use /links/search for keyword lookup.');
-        }
-        this.logger.log('LinksController.queryLinks', {
-            q,
-            total: result.links.length,
-        });
-        return {
-            query: q.trim(),
-            total: result.links.length,
-            links: result.links,
-            block: result.block,
-        };
+        return this.commandBus.execute(new link_commands_1.QueryLinksQuery(q));
     }
     async deleteBySourceFile(sourceFile) {
-        if (!sourceFile || !sourceFile.trim()) {
-            throw new common_1.BadRequestException('sourceFile param is required');
-        }
-        await this.repo.deleteBySourceFile(sourceFile.trim());
-        this.logger.log('LinksController.deleteBySourceFile', { sourceFile });
-        return { sourceFile: sourceFile.trim(), deleted: true };
+        return this.commandBus.execute(new link_commands_1.DeleteLinksBySourceFileCommand(sourceFile));
     }
     async indexLinks(files) {
         if (!files || files.length === 0) {
@@ -98,17 +55,7 @@ let LinksController = class LinksController {
                 .replace(/\\/g, '/')
                 .replace(/^\/+/, ''),
         }));
-        const folderRoots = [
-            ...new Set(normalizedFiles
-                .map((f) => f.originalname.split('/').slice(0, -1).join('/'))
-                .filter(Boolean)),
-        ];
-        this.logger.log('LinksController.indexLinks received', {
-            totalFiles: normalizedFiles.length,
-            folderRoots: folderRoots.length ? folderRoots : ['(flat — no subfolders)'],
-            files: normalizedFiles.map((f) => f.originalname),
-        });
-        return this.handler.execute(new extract_links_command_1.IndexLinksCommand(normalizedFiles));
+        return this.commandBus.execute(new link_commands_1.IndexLinksFilesCommand(normalizedFiles));
     }
 };
 exports.LinksController = LinksController;
@@ -152,8 +99,8 @@ __decorate([
 ], LinksController.prototype, "indexLinks", null);
 exports.LinksController = LinksController = __decorate([
     (0, common_1.Controller)('links'),
-    __param(1, (0, common_1.Inject)('IKnowledgeLinkRepository')),
-    __param(2, (0, common_1.Inject)('LoggerPort')),
-    __metadata("design:paramtypes", [link_service_1.LinkService, Object, Object, extract_links_handler_1.ExtractLinksHandler])
+    (0, common_1.UseGuards)(api_key_guard_1.ApiKeyGuard),
+    __param(0, (0, common_1.Inject)('CommandBus')),
+    __metadata("design:paramtypes", [Object])
 ], LinksController);
 //# sourceMappingURL=link.controller.js.map

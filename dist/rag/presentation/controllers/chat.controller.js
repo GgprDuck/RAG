@@ -14,59 +14,29 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatController = void 0;
 const common_1 = require("@nestjs/common");
-const prisma_service_1 = require("../../infrastructure/prisma/prisma.service");
 const api_response_1 = require("../api-response/api-response");
 const meta_1 = require("../api-response/meta");
+const chat_session_commands_1 = require("../../application/commands/chat-session.commands");
+const api_key_guard_1 = require("../guards/api-key.guard");
 let ChatController = class ChatController {
-    constructor(prisma) {
-        this.prisma = prisma;
+    constructor(commandBus) {
+        this.commandBus = commandBus;
     }
     async listChats() {
-        const rows = await this.prisma.conversationSession.findMany({
-            orderBy: { timestamp: 'desc' },
-            select: {
-                sessionId: true,
-                query: true,
-                timestamp: true,
-            },
-        });
-        const map = new Map();
-        for (const row of rows) {
-            if (!map.has(row.sessionId)) {
-                map.set(row.sessionId, {
-                    firstQuery: row.query,
-                    lastActivity: row.timestamp,
-                    count: 1,
-                });
-            }
-            else {
-                map.get(row.sessionId).count++;
-            }
-        }
-        const chats = [...map.entries()].map(([sessionId, data]) => ({
-            sessionId,
-            firstMessage: data.firstQuery.slice(0, 60) + (data.firstQuery.length > 60 ? '…' : ''),
-            lastActivity: data.lastActivity,
-            turnCount: data.count,
-        }));
+        const chats = await this.commandBus.execute(new chat_session_commands_1.ListChatsQuery());
         return api_response_1.ApiResponse.success(chats, new meta_1.Meta({ message: 'Chats retrieved', count: chats.length }));
     }
     async getChat(sessionId, limit) {
         const take = limit ? parseInt(limit, 10) : 100;
-        const rows = await this.prisma.conversationSession.findMany({
-            where: { sessionId },
-            orderBy: { timestamp: 'asc' },
-            take,
-            select: { id: true, query: true, answer: true, timestamp: true },
-        });
-        return api_response_1.ApiResponse.success({ sessionId, turns: rows }, new meta_1.Meta({ message: 'Chat retrieved', count: rows.length }));
+        const chat = await this.commandBus.execute(new chat_session_commands_1.GetChatQuery(sessionId, take));
+        return api_response_1.ApiResponse.success(chat, new meta_1.Meta({ message: 'Chat retrieved', count: chat.turns.length }));
     }
     async deleteChat(sessionId) {
-        await this.prisma.conversationSession.deleteMany({ where: { sessionId } });
+        await this.commandBus.execute(new chat_session_commands_1.DeleteChatCommand(sessionId));
         return api_response_1.ApiResponse.success(null, new meta_1.Meta({ message: 'Chat deleted' }));
     }
     async clearAllChats() {
-        await this.prisma.conversationSession.deleteMany({});
+        await this.commandBus.execute(new chat_session_commands_1.ClearAllChatsCommand());
         return api_response_1.ApiResponse.success(null, new meta_1.Meta({ message: 'All chats deleted' }));
     }
 };
@@ -100,6 +70,8 @@ __decorate([
 ], ChatController.prototype, "clearAllChats", null);
 exports.ChatController = ChatController = __decorate([
     (0, common_1.Controller)('rag/chats'),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    (0, common_1.UseGuards)(api_key_guard_1.ApiKeyGuard),
+    __param(0, (0, common_1.Inject)('CommandBus')),
+    __metadata("design:paramtypes", [Object])
 ], ChatController);
 //# sourceMappingURL=chat.controller.js.map

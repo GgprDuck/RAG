@@ -21,6 +21,11 @@ const embedding_vo_1 = require("../../domain/value-objects/embedding.vo");
 const text_chunk_util_1 = require("../utils/text-chunk.util");
 const embedding_util_1 = require("../utils/embedding.util");
 const file_text_util_1 = require("../utils/file-text.util");
+const answer_grounding_policy_1 = require("../policies/answer-grounding.policy");
+const score_histogram_util_1 = require("../utils/score-histogram.util");
+const rerank_strategy_util_1 = require("../utils/rerank-strategy.util");
+const rag_cache_service_1 = require("./rag-cache.service");
+const rag_ingest_service_1 = require("./rag-ingest.service");
 const prompt_injection_guard_1 = require("../guards/prompt-injection.guard");
 const advanced_chunking_util_1 = require("../utils/advanced-chunking.util");
 const query_transformer_util_1 = require("../utils/query-transformer.util");
@@ -34,8 +39,6 @@ const MIN_CHUNK_TEXT_LENGTH = 80;
 const UPLOAD_CONCURRENCY = 3;
 const EMBED_BATCH_SIZE = 10;
 const MAX_CONTEXT_CHARS = 6000;
-const RRF_K = 60;
-const ANSWER_CACHE_TTL_SEC = 60 * 3;
 const KEYWORD_STOP_WORDS = new Set([
     'what', 'is', 'are', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for',
     'of', 'with', 'by', 'from', 'and', 'or', 'but', 'how', 'when',
@@ -45,8 +48,7 @@ const KEYWORD_STOP_WORDS = new Set([
     'що', 'як', 'де', 'коли', 'хто', 'чому', 'який', 'яка', 'яке', 'які',
     'чи', 'або', 'та', 'це', 'є', 'у', 'в', 'на', 'до', 'по', 'про', 'за',
 ]);
-const FACTUAL_SCORE_THRESHOLD_CAP = 0.65;
-function reciprocalRankFusion(allResults, k = RRF_K) {
+function reciprocalRankFusion(allResults, k) {
     const rrfScores = new Map();
     for (const results of allResults) {
         const sorted = [...results].sort((a, b) => b.score - a.score);
@@ -57,7 +59,7 @@ function reciprocalRankFusion(allResults, k = RRF_K) {
     return rrfScores;
 }
 let TextRagService = class TextRagService {
-    constructor(vectorSearch, ragSettings, textRepository, conversationRepository, knowledgeGraph, logger, confidencePort, embeddingPort, chatLlmPort, linkService, ragContextFormatting, redis, cache) {
+    constructor(vectorSearch, ragSettings, textRepository, conversationRepository, knowledgeGraph, logger, confidencePort, embeddingPort, chatLlmPort, linkService, ragContextFormatting, redis, cache, ragCache, ragIngest, tracing) {
         this.vectorSearch = vectorSearch;
         this.ragSettings = ragSettings;
         this.textRepository = textRepository;
@@ -71,6 +73,9 @@ let TextRagService = class TextRagService {
         this.ragContextFormatting = ragContextFormatting;
         this.redis = redis;
         this.cache = cache;
+        this.ragCache = ragCache;
+        this.ragIngest = ragIngest;
+        this.tracing = tracing;
         this.queryTransformer = new query_transformer_util_1.QueryTransformer(this.chatLlmPort, this.redis);
         this.reranker = new reranker_util_1.Reranker(this.chatLlmPort, this.embeddingPort);
         this.hybridSearch = new hybrid_search_util_1.HybridSearchEngine(this.vectorSearch, this.logger);
@@ -81,18 +86,21 @@ let TextRagService = class TextRagService {
         const { ollamaEmbedModelText: embedModel } = this.ragSettings.get();
         const { chunkingStrategy = 'simple', enableKnowledgeGraph = false, } = options || {};
         const text = await (0, file_text_util_1.extractFileText)(file);
+        const rawText = file.buffer.toString('utf-8');
+        const keywords = await this.prepareKeywordsForFile(text, file.originalname, rawText);
         this.logger.log('Processing file', { name: file.originalname, strategy: chunkingStrategy });
         let savedCount = 0;
         if (chunkingStrategy === 'semantic') {
-            savedCount = await this.uploadWithSemantic(text, embedModel);
+            savedCount = await this.uploadWithSemantic(text, embedModel, keywords);
         }
         else if (chunkingStrategy === 'parent-child') {
             savedCount = await this.uploadWithParentChild(file, text, embedModel, options);
         }
         else {
-            savedCount = await this.uploadWithSimple(text, embedModel);
+            savedCount = await this.uploadWithSimple(text, embedModel, keywords);
         }
         this.logger.log(`Saved ${savedCount} documents to vector store`);
+        await this.ragCache.invalidateAnswerCache();
         if (enableKnowledgeGraph) {
             this.logger.log('Extracting knowledge graph...');
             await this.extractKnowledgeGraph(text, file.originalname);
@@ -129,22 +137,26 @@ let TextRagService = class TextRagService {
         }
         return { totalChunks, filesProcessed };
     }
-    async uploadWithSimple(text, embedModel) {
+    async uploadWithSimple(text, embedModel, keywords = []) {
         const rawChunks = (0, text_chunk_util_1.chunkTextBySentences)(text, { minWords: 20, maxWords: 150 });
         const chunks = rawChunks.filter(t => t.trim().length >= MIN_CHUNK_TEXT_LENGTH);
         this.logger.log(`Generated ${chunks.length} simple chunks (after min-length filter)`);
-        return this.embedAndSaveChunks(chunks, embedModel);
+        const chunkMeta = await Promise.all(chunks.map(chunk => this.prepareKeywordsForChunk(chunk, keywords).then(kws => ({ keywords: kws }))));
+        return this.ragIngest.embedAndSaveChunks(chunks, embedModel, 100, [], chunkMeta);
     }
-    async uploadWithSemantic(text, embedModel) {
+    async uploadWithSemantic(text, embedModel, keywords = []) {
         const semanticChunks = await (0, advanced_chunking_util_1.semanticChunking)(text, this.embeddingPort, {
             minChunkSize: 100,
             maxChunkSize: 500,
         });
-        const chunks = semanticChunks
-            .map(c => c.text)
-            .filter(t => t.trim().length >= MIN_CHUNK_TEXT_LENGTH);
+        const validSemantic = semanticChunks.filter(c => c.text.trim().length >= MIN_CHUNK_TEXT_LENGTH);
+        const chunks = validSemantic.map(c => c.text);
         this.logger.log(`Generated ${chunks.length} semantic chunks (after min-length filter)`);
-        return this.embedAndSaveChunks(chunks, embedModel);
+        const chunkMeta = await Promise.all(validSemantic.map(chunk => this.prepareKeywordsForChunk(chunk.text, keywords, chunk.metadata.sectionHeader).then(kws => ({
+            keywords: kws,
+            sectionTitle: chunk.metadata.sectionHeader,
+        }))));
+        return this.ragIngest.embedAndSaveChunks(chunks, embedModel, 100, [], chunkMeta);
     }
     async uploadWithParentChild(file, text, embedModel, options) {
         const { textRagVectorSize: vectorSize } = this.ragSettings.get();
@@ -187,10 +199,18 @@ let TextRagService = class TextRagService {
             return true;
         });
         let savedCount = 0;
+        const childKeywordMeta = await Promise.all(validChildren.map(chunk => this.prepareKeywordsForChunk(chunk.text, keywords, chunk.metadata.sectionHeader).then(kws => ({
+            keywords: kws,
+            sectionTitle: chunk.metadata.sectionHeader,
+        }))));
         for (let i = 0; i < validChildren.length; i += EMBED_BATCH_SIZE) {
             const batch = validChildren.slice(i, i + EMBED_BATCH_SIZE);
             const embeddings = await Promise.all(batch.map(c => this.embeddingPort.embed(c.text)));
-            const docs = batch.map((chunk, idx) => text_document_entity_1.TextDocument.create((0, uuid_1.v4)(), chunk.text, (0, embedding_util_1.extractEmbedding)(embeddings[idx]), embedModel, new Date(), chunk.metadata.chunkId, chunk.metadata.level, chunk.metadata.startIndex, chunk.metadata.endIndex, chunk.metadata.childIds, chunk.metadata.parentId, chunk.metadata.parentText, keywords));
+            const docs = batch.map((chunk, idx) => {
+                const globalIdx = i + idx;
+                const meta = childKeywordMeta[globalIdx];
+                return text_document_entity_1.TextDocument.create((0, uuid_1.v4)(), chunk.text, (0, embedding_util_1.extractEmbedding)(embeddings[idx]), embedModel, new Date(), chunk.metadata.chunkId, chunk.metadata.level, chunk.metadata.startIndex, chunk.metadata.endIndex, chunk.metadata.childIds, chunk.metadata.parentId, chunk.metadata.parentText, meta.keywords, meta.sectionTitle);
+            });
             await this.textRepository.saveMany(docs);
             savedCount += docs.length;
         }
@@ -216,6 +236,23 @@ let TextRagService = class TextRagService {
             afterEnrich: enriched.length,
         });
         return enriched;
+    }
+    async prepareKeywordsForChunk(chunkText, fileKeywords, sectionHeader) {
+        const chunkSpecific = await this.extractTextKeywords(chunkText.slice(0, 2000));
+        const headerParts = sectionHeader
+            ? [
+                sectionHeader,
+                ...sectionHeader.split(/\s+/).filter(w => w.length > 2),
+            ]
+            : [];
+        const merged = [
+            ...new Set([
+                ...chunkSpecific.slice(0, 12),
+                ...headerParts,
+                ...fileKeywords.slice(0, 6),
+            ]),
+        ];
+        return (0, transliteration_util_1.enrichKeywordsWithVariants)(this.sanitizeKeywords(merged));
     }
     sanitizeKeywords(keywords) {
         return keywords.filter(kw => {
@@ -354,17 +391,6 @@ let TextRagService = class TextRagService {
             freq.set(w, (freq.get(w) ?? 0) + 1);
         return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([w]) => w);
     }
-    async embedAndSaveChunks(chunks, embedModel, batchSize = 100) {
-        const documents = [];
-        for (let i = 0; i < chunks.length; i += batchSize) {
-            const batch = chunks.slice(i, Math.min(i + batchSize, chunks.length));
-            const embeddings = await Promise.all(batch.map(c => this.embeddingPort.embed(c)));
-            const batchDocs = batch.map((chunk, idx) => text_document_entity_1.TextDocument.create((0, uuid_1.v4)(), chunk, (0, embedding_util_1.extractEmbedding)(embeddings[idx]), embedModel, new Date()));
-            documents.push(...batchDocs);
-            await this.textRepository.saveMany(batchDocs);
-        }
-        return documents.length;
-    }
     buildFileId(originalname) {
         return originalname
             .replace(/\.md$/i, '')
@@ -373,11 +399,16 @@ let TextRagService = class TextRagService {
             .substring(0, 50);
     }
     async classifyQuery(query) {
+        const { classificationCacheTtlSec } = this.ragSettings.get();
         const key = `classification:${query.trim().toLowerCase().slice(0, 120)}`;
-        const ttl = 60 * 60;
+        const ttl = classificationCacheTtlSec;
+        const span = { spanName: 'classify' };
+        const started = Date.now();
+        this.tracing.startSpan(span);
         try {
             const cached = await this.cache.get(key);
             if (cached) {
+                this.tracing.endSpan(span, Date.now() - started);
                 return cached;
             }
         }
@@ -392,10 +423,14 @@ let TextRagService = class TextRagService {
         catch (err) {
             this.logger.warn('classifyQuery: Redis set failed', { error: err?.message });
         }
+        this.tracing.endSpan(span, Date.now() - started);
         return result;
     }
     async retrieve(query, limit, options) {
-        const { textRagDefaultLimit: defaultLimit, textRagCollectionName: collectionFromSettings } = this.ragSettings.get();
+        const retrieveSpan = { spanName: 'retrieve' };
+        const retrieveStarted = Date.now();
+        this.tracing.startSpan(retrieveSpan);
+        const { textRagDefaultLimit: defaultLimit, textRagCollectionName: collectionFromSettings, hybridKeywordScrollLimit, } = this.ragSettings.get();
         const effectiveLimit = limit ?? options?.limit ?? defaultLimit;
         const { useHybridSearch, useReranking, rerankStrategy, useQueryTransformation, useContextualCompression, useConversationMemory, sessionId, scoreThreshold, filters, _searchMode, } = options || {};
         const collectionName = collectionFromSettings;
@@ -459,26 +494,29 @@ let TextRagService = class TextRagService {
         const primaryEmbedding = new embedding_vo_1.Embedding(embeddings[0]);
         let results = [];
         const effectivenessLimit = (searchMode === 'entity' ? 6 : 4) * effectiveLimit;
+        const hybridBaseOpts = {
+            searchMode,
+            minTextLength: MIN_CHUNK_TEXT_LENGTH,
+            originalQuery: query,
+            keywordScrollLimit: hybridKeywordScrollLimit,
+            ...(metadataFilter ? { filter: metadataFilter } : {}),
+            ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
+        };
         if (shouldUseHybridSearch) {
-            let allSearchResults = await Promise.all(embeddings.map(emb => this.hybridSearch.search(collectionName, new embedding_vo_1.Embedding(emb), keywords, effectivenessLimit, {
-                searchMode,
-                minTextLength: MIN_CHUNK_TEXT_LENGTH,
-                originalQuery: query,
-                ...(metadataFilter ? { filter: metadataFilter } : {}),
-                ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
-            })));
+            let allSearchResults = await Promise.all(embeddings.map(emb => this.hybridSearch.search(collectionName, new embedding_vo_1.Embedding(emb), keywords, effectivenessLimit, hybridBaseOpts)));
             const isCompletelyEmpty = allSearchResults.every(arr => !arr || arr.length === 0);
             if (isCompletelyEmpty) {
                 allSearchResults = await Promise.all(embeddings.map(emb => this.hybridSearch.search(collectionName, new embedding_vo_1.Embedding(emb), keywords, effectivenessLimit, {
-                    searchMode,
-                    minTextLength: MIN_CHUNK_TEXT_LENGTH,
-                    originalQuery: query,
-                    ...(metadataFilter ? { filter: metadataFilter } : {}),
+                    ...hybridBaseOpts,
+                    searchMode: 'wide',
+                    scoreThreshold: undefined,
                 })));
             }
             const validResults = allSearchResults.filter(Boolean);
-            if (validResults.length === 0)
+            if (validResults.length === 0) {
+                this.tracing.endSpan(retrieveSpan, Date.now() - retrieveStarted);
                 return 'There is no relevant information in knowledge';
+            }
             const resultById = new Map();
             const perQueryForRrf = [];
             for (const searchResults of validResults) {
@@ -490,7 +528,8 @@ let TextRagService = class TextRagService {
                     return { id: r.id, score: r.hybridScore };
                 }));
             }
-            const rrfScores = reciprocalRankFusion(perQueryForRrf);
+            const { rrfK } = this.ragSettings.get();
+            const rrfScores = reciprocalRankFusion(perQueryForRrf, rrfK);
             if (uaStartIndex >= 0 && uaTranslations.length > 0 && collectionName) {
                 try {
                     const uaEmbeddings = embeddings.slice(uaStartIndex);
@@ -520,7 +559,7 @@ let TextRagService = class TextRagService {
                                 uaAdded++;
                             }
                             const existingRrf = rrfScores.get(id) ?? 0;
-                            rrfScores.set(id, existingRrf + (p.score ?? 0) * 0.9 / (RRF_K + 1));
+                            rrfScores.set(id, existingRrf + (p.score ?? 0) * 0.9 / (rrfK + 1));
                         }
                     }
                     this.logger.log('UA vector search merged', { uaAdded, total: rrfScores.size });
@@ -563,33 +602,35 @@ let TextRagService = class TextRagService {
             const keywordMissing = isEntityMode && keywords.length > 0 &&
                 !results.slice(0, 3).some(r => keywords.some(kw => r.text.toLowerCase().includes(kw.toLowerCase())));
             if (avgTopScore < 0.72 || keywordMissing) {
-                const hybridFallback = await this.hybridSearch.search(collectionName, primaryEmbedding, keywords, effectiveLimit * 3, {
-                    searchMode,
-                    minTextLength: MIN_CHUNK_TEXT_LENGTH,
-                    originalQuery: query,
-                    ...(metadataFilter ? { filter: metadataFilter } : {}),
-                    ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
-                });
-                if (!hybridFallback)
+                const hybridFallback = await this.hybridSearch.search(collectionName, primaryEmbedding, keywords, effectiveLimit * 3, hybridBaseOpts);
+                if (!hybridFallback) {
+                    this.tracing.endSpan(retrieveSpan, Date.now() - retrieveStarted);
                     return 'There is no relevant information in knowledge';
+                }
                 results = hybridFallback.map(r => ({ id: r.id, text: r.text, score: r.hybridScore }));
             }
         }
-        if (results.length === 0)
+        if (results.length === 0) {
+            this.tracing.endSpan(retrieveSpan, Date.now() - retrieveStarted);
             return 'There is no relevant information in knowledge';
+        }
         const entityCandidateLimit = searchMode === 'entity'
             ? Math.max(effectiveLimit * 4, 24)
             : effectiveLimit;
-        if (useReranking && rerankStrategy !== 'none' && results.length > effectiveLimit && searchMode !== 'wide') {
+        const { rerankScoreFloor, rerankScoreFloorWithoutRerank, } = this.ragSettings.get();
+        const rerankMethod = (0, rerank_strategy_util_1.normalizeRerankStrategy)(rerankStrategy);
+        if (useReranking &&
+            rerankMethod !== 'none' &&
+            results.length > effectiveLimit) {
             const reranked = await this.reranker.rerank(query, results, {
                 topK: entityCandidateLimit,
-                method: rerankStrategy === 'cross_encoder' ? 'listwise'
-                    : rerankStrategy === 'llm_based' ? 'llm'
-                        : 'hybrid',
+                method: rerankMethod,
             });
             results = reranked.map(r => ({ id: r.item.id, text: r.item.text, score: r.finalScore }));
         }
-        const scoreFloor = (useReranking && rerankStrategy !== 'none') ? 0.0163 : 0.01;
+        const scoreFloor = useReranking && rerankMethod !== 'none'
+            ? rerankScoreFloor
+            : rerankScoreFloorWithoutRerank;
         results = results.filter(r => r.score > scoreFloor);
         results = results.filter(r => r.level !== 0);
         if (searchMode === 'entity') {
@@ -655,11 +696,19 @@ let TextRagService = class TextRagService {
                     results = filtered;
                 }
                 else {
-                    this.logger.warn('EntityPostFilter: no name match found, returning unfiltered results', {
+                    const fallbackLimit = Math.min(3, effectiveLimit);
+                    results = [...results]
+                        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+                        .slice(0, fallbackLimit);
+                    results.forEach(r => {
+                        r.entityFilterFallback = true;
+                    });
+                    this.logger.warn('EntityPostFilter: no name match, returning top-K vector results', {
                         query,
                         nameGroups: nameTokenGroups.map(g => g[0]),
                         topResult: results[0]?.text.slice(0, 80),
                         resultCount: results.length,
+                        fallbackLimit,
                     });
                 }
             }
@@ -676,6 +725,7 @@ let TextRagService = class TextRagService {
             }
             catch { }
         }
+        this.tracing.endSpan(retrieveSpan, Date.now() - retrieveStarted);
         return results;
     }
     extractFallbackKeywords(query) {
@@ -733,70 +783,6 @@ let TextRagService = class TextRagService {
             ...(must.length > 0 ? { must } : {}),
             ...(mustNot.length > 0 ? { must_not: mustNot } : {}),
         };
-    }
-    normalizeCacheQuery(query) {
-        return query.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 600);
-    }
-    shouldUseAnswerCache(options) {
-        if (options?.useAnswerCache === false)
-            return false;
-        if (options?.sessionId)
-            return false;
-        if ((options?.conversationHistory?.length ?? 0) > 0)
-            return false;
-        if (options?.useConversationMemory)
-            return false;
-        return true;
-    }
-    getAnswerCacheKey(query, options) {
-        const payload = {
-            q: this.normalizeCacheQuery(query),
-            limit: options?.limit,
-            scoreThreshold: options?.scoreThreshold,
-            useHybridSearch: options?.useHybridSearch,
-            useReranking: options?.useReranking,
-            rerankStrategy: options?.rerankStrategy,
-            useQueryTransformation: options?.useQueryTransformation,
-            useContextualCompression: options?.useContextualCompression,
-            useKnowledgeGraph: options?.useKnowledgeGraph,
-            useCitationTracking: options?.useCitationTracking,
-            filters: options?.filters,
-            includeSources: options?.includeSources,
-            topP: options?.topP,
-            topK: options?.topK,
-            temperature: options?.temperature,
-            maxTokens: options?.maxTokens,
-        };
-        return `answer_cache:${JSON.stringify(payload)}`;
-    }
-    async getCachedAnswer(query, options) {
-        if (!this.shouldUseAnswerCache(options))
-            return null;
-        const key = this.getAnswerCacheKey(query, options);
-        try {
-            const cached = await this.redis.get(key);
-            if (!cached)
-                return null;
-            if (typeof cached === 'string') {
-                return JSON.parse(cached);
-            }
-            return cached;
-        }
-        catch (err) {
-            this.logger.warn('Answer cache get failed', { error: err?.message });
-            return null;
-        }
-    }
-    async setCachedAnswer(query, options, answer) {
-        if (!this.shouldUseAnswerCache(options))
-            return;
-        const key = this.getAnswerCacheKey(query, options);
-        try {
-            await this.redis.set(key, JSON.stringify(answer), { ex: ANSWER_CACHE_TTL_SEC });
-        }
-        catch (err) {
-            this.logger.warn('Answer cache set failed', { error: err?.message });
-        }
     }
     deduplicateContextDocs(docs, limit) {
         const seen = new Set();
@@ -870,9 +856,10 @@ let TextRagService = class TextRagService {
         }
         const retrieveDurationMs = Date.now() - retrieveStartMs;
         const effectiveThreshold = classification.type === 'factual'
-            ? Math.min(p.scoreThreshold, FACTUAL_SCORE_THRESHOLD_CAP)
+            ? Math.min(p.scoreThreshold, this.ragSettings.get().factualScoreThresholdCap)
             : p.scoreThreshold;
         const applyFilter = classification.type === 'factual' && classification.confidence > 0.8;
+        const scoreHistogram = (0, score_histogram_util_1.buildScoreHistogram)(rawRetrieved.map(el => el.score ?? 0));
         const preFiltered = applyFilter && effectiveThreshold
             ? rawRetrieved.filter(el => (el.score ?? 0) >= effectiveThreshold)
             : rawRetrieved;
@@ -885,6 +872,7 @@ let TextRagService = class TextRagService {
                 });
                 return rawRetrieved.slice(0, 3);
             })();
+        const entityFilterFallback = rawRetrieved.some((r) => r.entityFilterFallback);
         const retrieved = p.useParentExpansion
             ? await this.expandToParentContext(postFilterResults)
             : postFilterResults;
@@ -955,7 +943,33 @@ let TextRagService = class TextRagService {
                 hybridEnabled: retrieveOptions.useHybridSearch ?? p.useHybridSearch,
                 rerankEnabled: retrieveOptions.useReranking ?? p.useReranking,
                 contextualCompressionEnabled: retrieveOptions.useContextualCompression ?? p.useContextualCompression,
+                effectiveThreshold,
+                scoreFilterApplied: applyFilter,
+                scoreHistogram,
+                entityFilterFallback,
             },
+        };
+    }
+    extractVerificationChunks(response) {
+        const fromSources = (response.sources ?? []).map(s => s.text).filter(Boolean);
+        if (fromSources.length)
+            return fromSources;
+        return (response.citations ?? []).map(c => c.text).filter(Boolean);
+    }
+    async finalizeAnswerWithGrounding(response) {
+        const answerText = response.formattedAnswer ?? response.answer ?? '';
+        const chunks = this.extractVerificationChunks(response);
+        if (!answerText.trim() || !chunks.length) {
+            return response;
+        }
+        const verification = await this.confidencePort.verify(answerText, chunks);
+        const grounding = (0, answer_grounding_policy_1.applyGroundingPolicy)(answerText, verification);
+        return {
+            ...response,
+            answer: grounding.finalAnswer,
+            formattedAnswer: grounding.finalAnswer,
+            answerConfidence: grounding.answerConfidence,
+            confidence: grounding.answerConfidence,
         };
     }
     async runConfidenceCheck(query, answer, retrieved) {
@@ -1140,7 +1154,7 @@ let TextRagService = class TextRagService {
         catch (err) {
             return { answer: err?.message ?? 'Prompt injection detected' };
         }
-        const cached = await this.getCachedAnswer(query, options);
+        const cached = await this.ragCache.getCachedAnswer(query, options);
         if (cached) {
             const sanitizedCachedAnswer = this.sanitizeModelOutput(cached.formattedAnswer ?? cached.answer ?? '');
             this.logger.log('RagTrace_AnswerCache', {
@@ -1156,9 +1170,10 @@ let TextRagService = class TextRagService {
                     cacheHit: true,
                 },
             };
+            const groundedCached = await this.finalizeAnswerWithGrounding(cachedWithFlag);
             if (options?.includeRetrievalDiagnostics)
-                return cachedWithFlag;
-            const { retrievalDiagnostics, ...withoutDiagnostics } = cachedWithFlag;
+                return groundedCached;
+            const { retrievalDiagnostics, ...withoutDiagnostics } = groundedCached;
             return withoutDiagnostics;
         }
         const ctx = await this.prepareGenerationContext(query, options);
@@ -1186,37 +1201,44 @@ let TextRagService = class TextRagService {
             citations = tracked.citations;
             formattedAnswer = tracked.formattedAnswer;
         }
+        const includeCitationProvenance = options?.includeCitationProvenance ?? true;
+        if (!includeCitationProvenance) {
+            citations = citations.map((cite) => ({ id: cite.id, documentId: cite.documentId, text: cite.text }));
+        }
         if (options?.sessionId) {
             const embedding = await this.embeddingPort.embed(query);
             await this.conversationRepository.addTurn(options.sessionId, query, answer, (0, embedding_util_1.extractEmbedding)(embedding));
         }
         const topScore = retrieved[0]?.score;
-        const response = {
+        const retrievalScore = typeof topScore === 'number' ? topScore : undefined;
+        const sourceSnapshots = retrieved.map(doc => ({
+            id: doc.id,
+            text: doc.text,
+            score: doc.score,
+            metadata: doc.metadata,
+        }));
+        let response = {
             answer: formattedAnswer,
             formattedAnswer,
             citations,
             relevantChunks: retrieved.length,
-            confidence: typeof topScore === 'number' ? topScore : undefined,
+            retrievalConfidence: retrievalScore,
+            confidence: retrievalScore,
             queryType: classification.type,
             queryConfidence: classification.confidence,
             generationParams,
             conversationContext: !!options?.sessionId,
+            sources: sourceSnapshots,
             ...(options?.includeRetrievalDiagnostics && {
                 retrievalDiagnostics: {
                     ...retrievalDiagnostics,
                     cacheHit: false,
                 },
             }),
-            ...(options?.includeSources && {
-                sources: retrieved.map(doc => ({
-                    id: doc.id,
-                    text: doc.text,
-                    score: doc.score,
-                    metadata: doc.metadata,
-                })),
-            }),
+            ...(options?.includeSources && { sources: sourceSnapshots }),
         };
-        await this.setCachedAnswer(query, options, response);
+        response = await this.finalizeAnswerWithGrounding(response);
+        await this.ragCache.setCachedAnswer(query, options, response);
         this.logger.log('RagTrace_GenerateAnswer', {
             query: query.slice(0, 80),
             generationDurationMs,
@@ -1224,6 +1246,14 @@ let TextRagService = class TextRagService {
             citations: citations.length,
             relevantChunks: retrieved.length,
         });
+        if (!options?.includeRetrievalDiagnostics && response.retrievalDiagnostics) {
+            const { retrievalDiagnostics, ...withoutDiagnostics } = response;
+            return withoutDiagnostics;
+        }
+        if (!options?.includeSources && response.sources) {
+            const { sources, ...withoutSources } = response;
+            return withoutSources;
+        }
         return response;
     }
     async *streamableGenerateAnswer(query, options) {
@@ -1234,7 +1264,7 @@ let TextRagService = class TextRagService {
             yield { event: 'error', error: 'Prompt injection detected' };
             return;
         }
-        const cached = await this.getCachedAnswer(query, options);
+        const cached = await this.ragCache.getCachedAnswer(query, options);
         if (cached) {
             const sanitizedCachedAnswer = this.sanitizeModelOutput(cached.formattedAnswer ?? cached.answer ?? '');
             this.logger.log('RagTrace_Stream_AnswerCache', { query: query.slice(0, 80), hit: true });
@@ -1244,22 +1274,32 @@ let TextRagService = class TextRagService {
                 formattedAnswer: sanitizedCachedAnswer,
                 retrievalDiagnostics: { ...(cached.retrievalDiagnostics ?? {}), cacheHit: true },
             };
+            const groundedCached = await this.finalizeAnswerWithGrounding(cachedWithFlag);
+            const streamAnswer = groundedCached.formattedAnswer ?? groundedCached.answer;
             yield {
                 event: 'metadata',
                 metadata: {
-                    relevantChunks: cachedWithFlag.relevantChunks,
-                    confidence: cachedWithFlag.confidence,
-                    queryType: cachedWithFlag.queryType,
-                    queryConfidence: cachedWithFlag.queryConfidence,
-                    generationParams: cachedWithFlag.generationParams,
-                    conversationContext: cachedWithFlag.conversationContext,
+                    relevantChunks: groundedCached.relevantChunks,
+                    confidence: groundedCached.answerConfidence ?? groundedCached.confidence,
+                    answerConfidence: groundedCached.answerConfidence,
+                    queryType: groundedCached.queryType,
+                    queryConfidence: groundedCached.queryConfidence,
+                    generationParams: groundedCached.generationParams,
+                    conversationContext: groundedCached.conversationContext,
                     ...(options?.includeRetrievalDiagnostics && {
-                        retrievalDiagnostics: cachedWithFlag.retrievalDiagnostics,
+                        retrievalDiagnostics: groundedCached.retrievalDiagnostics,
                     }),
                 },
             };
-            yield { event: 'token', token: cachedWithFlag.formattedAnswer ?? cachedWithFlag.answer };
-            yield { event: 'done', metadata: { citations: cachedWithFlag.citations ?? [], relevantChunks: cachedWithFlag.relevantChunks ?? 0 } };
+            yield { event: 'token', token: streamAnswer };
+            yield {
+                event: 'done',
+                metadata: {
+                    citations: groundedCached.citations ?? [],
+                    relevantChunks: groundedCached.relevantChunks ?? 0,
+                    answerConfidence: groundedCached.answerConfidence,
+                },
+            };
             return;
         }
         let ctx = { earlyExit: 'Prepare generation context failed' };
@@ -1282,12 +1322,13 @@ let TextRagService = class TextRagService {
         const { classification, p, retrieved, prompt, generationParams, retrievalDiagnostics } = ctx;
         const { temperature, topP, topK, maxTokens, repeatPenalty, seed } = generationParams;
         const relevantChunks = retrieved.length;
-        const confidence = retrieved[0]?.score;
+        const retrievalConfidence = retrieved[0]?.score;
         yield {
             event: 'metadata',
             metadata: {
                 relevantChunks,
-                confidence,
+                retrievalConfidence,
+                confidence: retrievalConfidence,
                 queryType: classification.type,
                 queryConfidence: classification.confidence,
                 generationParams,
@@ -1329,65 +1370,109 @@ let TextRagService = class TextRagService {
             yield { event: 'error', error: 'LLM streaming failed' };
             return;
         }
-        let finalAnswer = streamedSanitizedAnswer;
-        try {
-            const verification = await this.confidencePort.verify(finalAnswer, retrieved.map(r => r.text));
-            this.logger.log('Stream_Confidence', {
-                score: verification.confidence.score,
-                tier: verification.confidence.tier,
-                grounded: verification.grounded,
-                verdict: verification.llmVerdict,
-            });
-            if (!verification.grounded && verification.llmVerdict === 'NO') {
-                finalAnswer = 'Немає релевантної відповіді';
-                yield { event: 'correction', correctedAnswer: finalAnswer, reason: 'hallucination' };
-            }
-        }
-        catch (err) {
-            this.logger.warn('Stream_Confidence: check failed', { error: err?.message });
-        }
+        const finalAnswer = streamedSanitizedAnswer;
         let citations = [];
         try {
             const useCitations = options?.useCitationTracking ?? p.useCitationTracking;
             citations = useCitations
                 ? this.trackCitations(finalAnswer, retrieved).citations
                 : [];
+            const includeCitationProvenance = options?.includeCitationProvenance ?? true;
+            if (!includeCitationProvenance) {
+                citations = citations.map((cite) => ({ id: cite.id, documentId: cite.documentId, text: cite.text }));
+            }
         }
         catch (err) {
             yield { event: 'error', error: 'Citation tracking failed' };
             return;
         }
-        if (options?.sessionId) {
-            this.persistSessionTurn(options.sessionId, query, finalAnswer);
+        if (citations.length) {
+            yield { event: 'citations', citations };
         }
-        const responseForCache = {
+        const preGroundResponse = {
             answer: finalAnswer,
             formattedAnswer: finalAnswer,
             citations,
             relevantChunks,
-            confidence,
+            retrievalConfidence,
+            confidence: retrievalConfidence,
             queryType: classification.type,
             queryConfidence: classification.confidence,
             generationParams,
             conversationContext: !!options?.sessionId,
+            sources: retrieved.map(doc => ({
+                id: doc.id,
+                text: doc.text,
+                score: doc.score,
+                metadata: doc.metadata,
+            })),
         };
-        await this.setCachedAnswer(query, options, responseForCache);
-        yield { event: 'done', metadata: { citations, relevantChunks } };
+        if (options?.sessionId) {
+            this.persistSessionTurn(options.sessionId, query, finalAnswer);
+        }
+        void this.finalizeStreamAnswerInBackground(query, options, preGroundResponse);
+        yield {
+            event: 'done',
+            metadata: {
+                citations,
+                relevantChunks,
+                answerConfidence: retrievalConfidence,
+            },
+        };
+    }
+    finalizeStreamAnswerInBackground(query, options, response) {
+        void (async () => {
+            let answerConfidence;
+            let cachedResponse = response;
+            try {
+                const grounded = await this.finalizeAnswerWithGrounding(response);
+                answerConfidence = grounded.answerConfidence;
+                cachedResponse = {
+                    ...grounded,
+                    citations: response.citations,
+                    relevantChunks: response.relevantChunks,
+                    retrievalConfidence: response.retrievalConfidence,
+                    confidence: grounded.answerConfidence ?? response.retrievalConfidence,
+                };
+            }
+            catch (err) {
+                this.logger.warn('Stream_Confidence: check failed', { error: err?.message });
+            }
+            try {
+                await this.ragCache.setCachedAnswer(query, options, cachedResponse);
+            }
+            catch (err) {
+                this.logger.warn('Stream_Cache: set failed', { error: err?.message });
+            }
+        })();
     }
     async deleteById(id) {
         await this.textRepository.deleteById(id);
+        await this.ragCache.invalidateAnswerCache();
         return { deletedDocumentId: id };
     }
     trackCitations(answer, retrievedDocs) {
         const citations = [];
         let formattedAnswer = answer;
         retrievedDocs.forEach((doc, idx) => {
+            const metadata = doc.metadata ?? {};
             const sentences = doc.text.match(/[^.!?…]+[.!?…]+/g) || [];
             sentences.forEach(sentence => {
                 if (sentence.length < 20)
                     return;
                 if (this.findSimilarContent(answer, sentence)) {
-                    citations.push({ id: `cite_${idx}`, documentId: doc.id, text: sentence });
+                    citations.push({
+                        id: `cite_${idx}`,
+                        documentId: doc.id,
+                        text: sentence,
+                        provenance: {
+                            chunkId: doc.chunkId ?? metadata.chunkId,
+                            model: doc.model,
+                            createdAt: doc.createdAt,
+                            startIndex: doc.startIndex ?? metadata.startIndex,
+                            endIndex: doc.endIndex ?? metadata.endIndex,
+                        },
+                    });
                 }
             });
         });
@@ -1595,6 +1680,8 @@ exports.TextRagService = TextRagService = __decorate([
     __param(10, (0, common_1.Inject)('IRagContextFormattingPort')),
     __param(11, (0, common_1.Inject)('REDIS_CLIENT')),
     __param(12, (0, common_1.Inject)('CachePort')),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, link_service_1.LinkService, Object, redis_1.Redis, Object])
+    __param(15, (0, common_1.Inject)('IRagTracingPort')),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, link_service_1.LinkService, Object, redis_1.Redis, Object, rag_cache_service_1.RagCacheService,
+        rag_ingest_service_1.RagIngestService, Object])
 ], TextRagService);
 //# sourceMappingURL=text-rag.service.js.map

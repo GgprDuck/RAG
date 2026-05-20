@@ -20,6 +20,7 @@ class TextDocumentQdrantMapper {
                 parentId: doc.parentId,
                 parentText: doc.parentText,
                 contextKeywords: doc.contextKeywords,
+                sectionTitle: doc.sectionTitle,
             },
         };
     }
@@ -29,7 +30,7 @@ class TextDocumentQdrantMapper {
             : new Date();
         const resolvedModel = model ?? String(point.payload?.model ?? 'unknown');
         const payload = point.payload;
-        return new text_document_entity_1.TextDocument(String(point.id), String(payload?.text ?? ''), new embedding_vo_1.Embedding(point.vector ?? []), resolvedModel, createdAt, payload?.chunkId ? String(payload.chunkId) : undefined, payload?.level != null ? Number(payload.level) : undefined, payload?.startIndex != null ? Number(payload.startIndex) : undefined, payload?.endIndex != null ? Number(payload.endIndex) : undefined, Array.isArray(payload?.childIds) ? payload.childIds : undefined, payload?.parentId ? String(payload.parentId) : undefined, payload?.parentText ? String(payload.parentText) : undefined, Array.isArray(payload?.contextKeywords) ? payload.contextKeywords : undefined);
+        return new text_document_entity_1.TextDocument(String(point.id), String(payload?.text ?? ''), new embedding_vo_1.Embedding(point.vector ?? []), resolvedModel, createdAt, payload?.chunkId ? String(payload.chunkId) : undefined, payload?.level != null ? Number(payload.level) : undefined, payload?.startIndex != null ? Number(payload.startIndex) : undefined, payload?.endIndex != null ? Number(payload.endIndex) : undefined, Array.isArray(payload?.childIds) ? payload.childIds : undefined, payload?.parentId ? String(payload.parentId) : undefined, payload?.parentText ? String(payload.parentText) : undefined, Array.isArray(payload?.contextKeywords) ? payload.contextKeywords : undefined, payload?.sectionTitle ? String(payload.sectionTitle) : undefined);
     }
 }
 exports.TextDocumentQdrantMapper = TextDocumentQdrantMapper;

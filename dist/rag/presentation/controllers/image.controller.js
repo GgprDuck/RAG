@@ -20,6 +20,7 @@ const delete_image_command_1 = require("../../application/commands/delete-image.
 const rag_queries_1 = require("../../application/queries/rag.queries");
 const api_response_1 = require("../api-response/api-response");
 const meta_1 = require("../api-response/meta");
+const api_key_guard_1 = require("../guards/api-key.guard");
 let RagImagesController = class RagImagesController {
     constructor(commandBus) {
         this.commandBus = commandBus;
@@ -76,6 +77,7 @@ __decorate([
 ], RagImagesController.prototype, "deleteImage", null);
 exports.RagImagesController = RagImagesController = __decorate([
     (0, common_1.Controller)('rag/images'),
+    (0, common_1.UseGuards)(api_key_guard_1.ApiKeyGuard),
     __param(0, (0, common_1.Inject)('CommandBus')),
     __metadata("design:paramtypes", [Object])
 ], RagImagesController);

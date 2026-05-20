@@ -1,7 +1,9 @@
 export declare enum RerankStrategy {
     NONE = "none",
     CROSS_ENCODER = "cross_encoder",
-    LLM_BASED = "llm_based"
+    LISTWISE_LLM = "listwise_llm",
+    LLM_BASED = "llm_based",
+    HYBRID = "hybrid"
 }
 export declare class ConversationMessage {
     role: 'user' | 'assistant';
@@ -20,6 +22,7 @@ export declare class AdvancedRagOptionsDto {
     useContextualCompression?: boolean;
     useConversationMemory?: boolean;
     useCitationTracking?: boolean;
+    includeCitationProvenance?: boolean;
     includeRetrievalDiagnostics?: boolean;
     useAnswerCache?: boolean;
     useKnowledgeGraph?: boolean;

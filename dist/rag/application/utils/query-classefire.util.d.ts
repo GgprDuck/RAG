@@ -13,7 +13,7 @@ export interface FineTuningParams {
     useHybridSearch: boolean;
     useQueryTransformation: boolean;
     useReranking: boolean;
-    rerankStrategy: 'cross_encoder' | 'llm_based' | 'none' | 'hybrid';
+    rerankStrategy: 'listwise_llm' | 'llm_based' | 'none' | 'hybrid';
     useContextualCompression: boolean;
     useParentExpansion: boolean;
     useKnowledgeGraph: boolean;

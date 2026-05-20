@@ -1,7 +1,5 @@
-import { LinkService } from '../../application/services/link.service';
-import { IKnowledgeLink, IKnowledgeLinkRepository } from '../../domain/interfaces/knowledge-link.interface';
-import { LoggerPort } from '../../shared/application/ports/logger.port';
-import { ExtractLinksHandler } from "../../application/handlers/extract-links.handler";
+import { IKnowledgeLink } from '../../domain/interfaces/knowledge-link.interface';
+import { CommandBusPort } from "../../shared/application/ports/command-bus.port";
 export interface GetAllLinksResponse {
     total: number;
     links: IKnowledgeLink[];
@@ -21,11 +19,8 @@ export interface IndexLinksResponse {
     linksIndexed: number;
 }
 export declare class LinksController {
-    private readonly linkService;
-    private readonly repo;
-    private readonly logger;
-    private readonly handler;
-    constructor(linkService: LinkService, repo: IKnowledgeLinkRepository, logger: LoggerPort, handler: ExtractLinksHandler);
+    private readonly commandBus;
+    constructor(commandBus: CommandBusPort);
     getAllLinks(sourceFile?: string): Promise<GetAllLinksResponse>;
     searchLinks(q?: string): Promise<SearchLinksResponse>;
     queryLinks(q?: string): Promise<SearchLinksResponse>;

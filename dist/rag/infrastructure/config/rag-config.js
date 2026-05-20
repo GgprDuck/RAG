@@ -4,7 +4,7 @@ exports.ragConfig = exports.RAG_CONFIG = void 0;
 const config_1 = require("@nestjs/config");
 exports.RAG_CONFIG = 'rag-config';
 exports.ragConfig = (0, config_1.registerAs)(exports.RAG_CONFIG, () => {
-    const { OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL_TEXT, OLLAMA_EMBED_MODEL_IMAGE, OLLAMA_CHAT_MODEL, OLLAMA_VISION_MODEL, OLLAMA_API_KEY, QDRANT_URL, QDRANT_API_KEY, S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET_NAME, S3_REGION, S3_USE_SSL, S3_PUBLIC_URL, TEXT_RAG_COLLECTION_NAME, TEXT_RAG_DEFAULT_LIMIT, TEXT_RAG_VECTOR_SIZE, TEXT_RAG_HNSW_M, TEXT_RAG_HNSW_EF_CONSTRUCT, TEXT_RAG_HNSW_EF_SEARCH, TEXT_RAG_MIN_SCORE_THRESHOLD, IMAGE_RAG_COLLECTION_NAME, IMAGE_RAG_VECTOR_SIZE, IMAGE_RAG_MIN_SCORE_THRESHOLD, IMAGE_RAG_HNSW_M, IMAGE_RAG_HNSW_EF_CONSTRUCT, IMAGE_RAG_HNSW_EF_SEARCH, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, } = process.env;
+    const { OLLAMA_BASE_URL, RAG_API_KEY, RAG_ALLOW_OPEN, RAG_RRF_K, RAG_ANSWER_CACHE_TTL_SEC, RAG_CLASSIFICATION_CACHE_TTL_SEC, RAG_RERANK_SCORE_FLOOR, RAG_RERANK_SCORE_FLOOR_NO_RERANK, RAG_HYBRID_KEYWORD_SCROLL_LIMIT, RAG_FACTUAL_SCORE_THRESHOLD_CAP, RAG_CONFIDENCE_HIGH, RAG_CONFIDENCE_LOW, RAG_CONFIDENCE_GRAY_ZONE_FINAL, RAG_CONFIDENCE_LLM_YES_THRESHOLD, OLLAMA_EMBED_MODEL_TEXT, OLLAMA_EMBED_MODEL_IMAGE, OLLAMA_CHAT_MODEL, OLLAMA_VISION_MODEL, OLLAMA_API_KEY, QDRANT_URL, QDRANT_API_KEY, S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET_NAME, S3_REGION, S3_USE_SSL, S3_PUBLIC_URL, TEXT_RAG_COLLECTION_NAME, TEXT_RAG_DEFAULT_LIMIT, TEXT_RAG_VECTOR_SIZE, TEXT_RAG_HNSW_M, TEXT_RAG_HNSW_EF_CONSTRUCT, TEXT_RAG_HNSW_EF_SEARCH, TEXT_RAG_MIN_SCORE_THRESHOLD, IMAGE_RAG_COLLECTION_NAME, IMAGE_RAG_VECTOR_SIZE, IMAGE_RAG_MIN_SCORE_THRESHOLD, IMAGE_RAG_HNSW_M, IMAGE_RAG_HNSW_EF_CONSTRUCT, IMAGE_RAG_HNSW_EF_SEARCH, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, } = process.env;
     const parseHnswConfig = (m, efConstruct, efSearch) => {
         if (!m || !efConstruct)
             return undefined;
@@ -15,6 +15,12 @@ exports.ragConfig = (0, config_1.registerAs)(exports.RAG_CONFIG, () => {
         };
     };
     return {
+        apiKey: RAG_API_KEY,
+        allowOpenApi: RAG_ALLOW_OPEN === 'false'
+            ? false
+            : RAG_ALLOW_OPEN === 'true'
+                ? true
+                : undefined,
         ollamaBaseUrl: OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
         ollamaEmbedModelText: OLLAMA_EMBED_MODEL_TEXT || 'nomic-embed-text',
         ollamaEmbedModelImage: OLLAMA_EMBED_MODEL_IMAGE || 'clip-text',
@@ -52,6 +58,33 @@ exports.ragConfig = (0, config_1.registerAs)(exports.RAG_CONFIG, () => {
         neo4JUrl: NEO4J_URI,
         neo4jPassword: NEO4J_PASSWORD,
         neo4jUser: NEO4J_USER,
+        rrfK: RAG_RRF_K ? Number(RAG_RRF_K) : 60,
+        answerCacheTtlSec: RAG_ANSWER_CACHE_TTL_SEC
+            ? Number(RAG_ANSWER_CACHE_TTL_SEC)
+            : 180,
+        classificationCacheTtlSec: RAG_CLASSIFICATION_CACHE_TTL_SEC
+            ? Number(RAG_CLASSIFICATION_CACHE_TTL_SEC)
+            : 3600,
+        rerankScoreFloor: RAG_RERANK_SCORE_FLOOR
+            ? Number(RAG_RERANK_SCORE_FLOOR)
+            : 0.0163,
+        rerankScoreFloorWithoutRerank: RAG_RERANK_SCORE_FLOOR_NO_RERANK
+            ? Number(RAG_RERANK_SCORE_FLOOR_NO_RERANK)
+            : 0.01,
+        hybridKeywordScrollLimit: RAG_HYBRID_KEYWORD_SCROLL_LIMIT
+            ? Number(RAG_HYBRID_KEYWORD_SCROLL_LIMIT)
+            : 500,
+        factualScoreThresholdCap: RAG_FACTUAL_SCORE_THRESHOLD_CAP
+            ? Number(RAG_FACTUAL_SCORE_THRESHOLD_CAP)
+            : 0.5,
+        confidenceHigh: RAG_CONFIDENCE_HIGH ? Number(RAG_CONFIDENCE_HIGH) : 0.85,
+        confidenceLow: RAG_CONFIDENCE_LOW ? Number(RAG_CONFIDENCE_LOW) : 0.65,
+        confidenceGrayZoneFinal: RAG_CONFIDENCE_GRAY_ZONE_FINAL
+            ? Number(RAG_CONFIDENCE_GRAY_ZONE_FINAL)
+            : 0.65,
+        confidenceLlmYesThreshold: RAG_CONFIDENCE_LLM_YES_THRESHOLD
+            ? Number(RAG_CONFIDENCE_LLM_YES_THRESHOLD)
+            : 0.15,
     };
 });
 //# sourceMappingURL=rag-config.js.map

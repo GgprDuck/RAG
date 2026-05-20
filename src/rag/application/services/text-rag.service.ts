@@ -16,7 +16,13 @@ import {
   IUploadKnowledge,
 } from '../common/interfaces/rag-documents.interfaces';
 import { TextRagPort } from 'src/rag/domain/ports/textRagPort';
-import { UploadFolderOptions } from '../commands/upload-folder.command';
+import { UploadFolderOptions } from 'src/rag/domain/interfaces/upload-folder-options.interface';
+import { applyGroundingPolicy } from '../policies/answer-grounding.policy';
+import { buildScoreHistogram } from '../utils/score-histogram.util';
+import { normalizeRerankStrategy } from '../utils/rerank-strategy.util';
+import { RagCacheService } from './rag-cache.service';
+import { RagIngestService } from './rag-ingest.service';
+import type { IRagTracingPort } from 'src/rag/domain/ports/rag-tracing.port';
 import { PromptInjectionGuard } from '../guards/prompt-injection.guard';
 import {
   semanticChunking,
@@ -54,9 +60,6 @@ const UPLOAD_CONCURRENCY    = 3;
 const EMBED_BATCH_SIZE      = 10;
 const MAX_CONTEXT_CHARS     = 6000;
 
-const RRF_K = 60;
-const ANSWER_CACHE_TTL_SEC = 60 * 3;
-
 const KEYWORD_STOP_WORDS = new Set([
   'what', 'is', 'are', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for',
   'of', 'with', 'by', 'from', 'and', 'or', 'but', 'how', 'when',
@@ -67,12 +70,17 @@ const KEYWORD_STOP_WORDS = new Set([
   'чи', 'або', 'та', 'це', 'є', 'у', 'в', 'на', 'до', 'по', 'про', 'за',
 ]);
 
-const FACTUAL_SCORE_THRESHOLD_CAP = 0.65;
-
 interface TrackCitation {
   id: string;
   documentId: string;
   text: string;
+  provenance?: {
+    chunkId?: string;
+    model?: string;
+    createdAt?: string;
+    startIndex?: number;
+    endIndex?: number;
+  };
 }
 
 interface RetrieveInternalOptions extends Pick<
@@ -106,6 +114,10 @@ interface PreparedContext {
     rerankEnabled: boolean;
     contextualCompressionEnabled: boolean;
     cacheHit?: boolean;
+    effectiveThreshold?: number;
+    scoreFilterApplied?: boolean;
+    scoreHistogram?: ReturnType<typeof buildScoreHistogram>;
+    entityFilterFallback?: boolean;
   };
 }
 
@@ -126,7 +138,7 @@ interface MetadataFilterInput {
 
 function reciprocalRankFusion(
   allResults: Array<Array<{ id: string; score: number }>>,
-  k = RRF_K,
+  k: number,
 ): Map<string, number> {
   const rrfScores = new Map<string, number>();
   for (const results of allResults) {
@@ -172,6 +184,10 @@ export class TextRagService implements TextRagPort {
     private readonly redis: Redis,
     @Inject('CachePort')
     private readonly cache: CachePort,
+    private readonly ragCache: RagCacheService,
+    private readonly ragIngest: RagIngestService,
+    @Inject('IRagTracingPort')
+    private readonly tracing: IRagTracingPort,
   ) {
     this.queryTransformer     = new QueryTransformer(this.chatLlmPort, this.redis);
     this.reranker             = new Reranker(this.chatLlmPort, this.embeddingPort);
@@ -191,19 +207,22 @@ export class TextRagService implements TextRagPort {
     } = options || {};
 
     const text = await extractFileText(file);
+    const rawText = file.buffer.toString('utf-8');
+    const keywords = await this.prepareKeywordsForFile(text, file.originalname, rawText);
     this.logger.log('Processing file', { name: file.originalname, strategy: chunkingStrategy });
 
     let savedCount = 0;
 
     if (chunkingStrategy === 'semantic') {
-      savedCount = await this.uploadWithSemantic(text, embedModel);
+      savedCount = await this.uploadWithSemantic(text, embedModel, keywords);
     } else if (chunkingStrategy === 'parent-child') {
       savedCount = await this.uploadWithParentChild(file, text, embedModel, options);
     } else {
-      savedCount = await this.uploadWithSimple(text, embedModel);
+      savedCount = await this.uploadWithSimple(text, embedModel, keywords);
     }
 
     this.logger.log(`Saved ${savedCount} documents to vector store`);
+    await this.ragCache.invalidateAnswerCache();
 
     if (enableKnowledgeGraph) {
       this.logger.log('Extracting knowledge graph...');
@@ -252,23 +271,49 @@ export class TextRagService implements TextRagPort {
     return { totalChunks, filesProcessed };
   }
 
-  private async uploadWithSimple(text: string, embedModel: string): Promise<number> {
+  private async uploadWithSimple(
+    text: string,
+    embedModel: string,
+    keywords: string[] = [],
+  ): Promise<number> {
     const rawChunks = chunkTextBySentences(text, { minWords: 20, maxWords: 150 });
     const chunks    = rawChunks.filter(t => t.trim().length >= MIN_CHUNK_TEXT_LENGTH);
     this.logger.log(`Generated ${chunks.length} simple chunks (after min-length filter)`);
-    return this.embedAndSaveChunks(chunks, embedModel);
+    const chunkMeta = await Promise.all(
+      chunks.map(chunk =>
+        this.prepareKeywordsForChunk(chunk, keywords).then(kws => ({ keywords: kws })),
+      ),
+    );
+    return this.ragIngest.embedAndSaveChunks(chunks, embedModel, 100, [], chunkMeta);
   }
 
-  private async uploadWithSemantic(text: string, embedModel: string): Promise<number> {
+  private async uploadWithSemantic(
+    text: string,
+    embedModel: string,
+    keywords: string[] = [],
+  ): Promise<number> {
     const semanticChunks = await semanticChunking(text, this.embeddingPort, {
       minChunkSize: 100,
       maxChunkSize: 500,
     });
-    const chunks = semanticChunks
-      .map(c => c.text)
-      .filter(t => t.trim().length >= MIN_CHUNK_TEXT_LENGTH);
+    const validSemantic = semanticChunks.filter(
+      c => c.text.trim().length >= MIN_CHUNK_TEXT_LENGTH,
+    );
+    const chunks = validSemantic.map(c => c.text);
     this.logger.log(`Generated ${chunks.length} semantic chunks (after min-length filter)`);
-    return this.embedAndSaveChunks(chunks, embedModel);
+    const chunkMeta = await Promise.all(
+      validSemantic.map(chunk =>
+        this.prepareKeywordsForChunk(
+          chunk.text,
+          keywords,
+          chunk.metadata.sectionHeader,
+        ).then(kws => ({
+          keywords: kws,
+          sectionTitle: chunk.metadata.sectionHeader,
+        })),
+      ),
+    );
+    return this.ragIngest.embedAndSaveChunks(chunks, embedModel, 100, [], chunkMeta);
   }
 
   private async uploadWithParentChild(
@@ -345,12 +390,27 @@ export class TextRagService implements TextRagPort {
 
     let savedCount = 0;
 
+    const childKeywordMeta = await Promise.all(
+      validChildren.map(chunk =>
+        this.prepareKeywordsForChunk(
+          chunk.text,
+          keywords,
+          chunk.metadata.sectionHeader,
+        ).then(kws => ({
+          keywords: kws,
+          sectionTitle: chunk.metadata.sectionHeader,
+        })),
+      ),
+    );
+
     for (let i = 0; i < validChildren.length; i += EMBED_BATCH_SIZE) {
       const batch      = validChildren.slice(i, i + EMBED_BATCH_SIZE);
       const embeddings = await Promise.all(batch.map(c => this.embeddingPort.embed(c.text)));
 
-      const docs = batch.map((chunk, idx) =>
-        TextDocument.create(
+      const docs = batch.map((chunk, idx) => {
+        const globalIdx = i + idx;
+        const meta = childKeywordMeta[globalIdx];
+        return TextDocument.create(
           uuidv4(),
           chunk.text,
           extractEmbedding(embeddings[idx]),
@@ -363,9 +423,10 @@ export class TextRagService implements TextRagPort {
           chunk.metadata.childIds,
           chunk.metadata.parentId,
           chunk.metadata.parentText,
-          keywords,
-        ),
-      );
+          meta.keywords,
+          meta.sectionTitle,
+        );
+      });
 
       await this.textRepository.saveMany(docs);
       savedCount += docs.length;
@@ -402,6 +463,29 @@ export class TextRagService implements TextRagPort {
     });
 
     return enriched;
+  }
+
+  private async prepareKeywordsForChunk(
+    chunkText: string,
+    fileKeywords: string[],
+    sectionHeader?: string,
+  ): Promise<string[]> {
+    const chunkSpecific = await this.extractTextKeywords(chunkText.slice(0, 2000));
+    const headerParts = sectionHeader
+      ? [
+          sectionHeader,
+          ...sectionHeader.split(/\s+/).filter(w => w.length > 2),
+        ]
+      : [];
+
+    const merged = [
+      ...new Set([
+        ...chunkSpecific.slice(0, 12),
+        ...headerParts,
+        ...fileKeywords.slice(0, 6),
+      ]),
+    ];
+    return enrichKeywordsWithVariants(this.sanitizeKeywords(merged));
   }
 
   private sanitizeKeywords(keywords: string[]): string[] {
@@ -557,26 +641,6 @@ export class TextRagService implements TextRagPort {
     return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([w]) => w);
   }
 
-  private async embedAndSaveChunks(
-    chunks: string[],
-    embedModel: string,
-    batchSize = 100,
-  ): Promise<number> {
-    const documents: TextDocument[] = [];
-    for (let i = 0; i < chunks.length; i += batchSize) {
-      const batch      = chunks.slice(i, Math.min(i + batchSize, chunks.length));
-      const embeddings = await Promise.all(batch.map(c => this.embeddingPort.embed(c)));
-      const batchDocs  = batch.map((chunk, idx) =>
-        TextDocument.create(
-          uuidv4(), chunk, extractEmbedding(embeddings[idx]), embedModel, new Date(),
-        ),
-      );
-      documents.push(...batchDocs);
-      await this.textRepository.saveMany(batchDocs);
-    }
-    return documents.length;
-  }
-
   private buildFileId(originalname: string): string {
     return originalname
       .replace(/\.md$/i, '')
@@ -586,12 +650,17 @@ export class TextRagService implements TextRagPort {
   }
 
   private async classifyQuery(query: string): Promise<QueryClassification> {
+    const { classificationCacheTtlSec } = this.ragSettings.get();
     const key = `classification:${query.trim().toLowerCase().slice(0, 120)}`;
-    const ttl = 60 * 60;
+    const ttl = classificationCacheTtlSec;
+    const span = { spanName: 'classify' };
+    const started = Date.now();
+    this.tracing.startSpan(span);
     try {
       const cached = await this.cache.get<QueryClassification>(key);
 
       if (cached) {
+        this.tracing.endSpan(span, Date.now() - started);
         return cached;
       }
     } catch (err: any) {
@@ -607,6 +676,7 @@ export class TextRagService implements TextRagPort {
       this.logger.warn('classifyQuery: Redis set failed', { error: err?.message });
     }
 
+    this.tracing.endSpan(span, Date.now() - started);
     return result;
   }
 
@@ -615,8 +685,15 @@ export class TextRagService implements TextRagPort {
     limit?: number,
     options?: RetrieveInternalOptions,
   ): Promise<Array<IDocumentWithEmbedding> | string> {
-    const { textRagDefaultLimit: defaultLimit, textRagCollectionName: collectionFromSettings } =
-      this.ragSettings.get();
+    const retrieveSpan = { spanName: 'retrieve' };
+    const retrieveStarted = Date.now();
+    this.tracing.startSpan(retrieveSpan);
+
+    const {
+      textRagDefaultLimit: defaultLimit,
+      textRagCollectionName: collectionFromSettings,
+      hybridKeywordScrollLimit,
+    } = this.ragSettings.get();
     const effectiveLimit = limit ?? options?.limit ?? defaultLimit;
 
     const {
@@ -713,6 +790,14 @@ export class TextRagService implements TextRagPort {
     let results: Array<{ id: string; text: string; score: number }> = [];
 
     const effectivenessLimit = (searchMode === 'entity' ? 6 : 4) * effectiveLimit;
+    const hybridBaseOpts = {
+      searchMode,
+      minTextLength: MIN_CHUNK_TEXT_LENGTH,
+      originalQuery: query,
+      keywordScrollLimit: hybridKeywordScrollLimit,
+      ...(metadataFilter ? { filter: metadataFilter } : {}),
+      ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
+    };
 
     if (shouldUseHybridSearch) {
       let allSearchResults = await Promise.all(
@@ -722,13 +807,7 @@ export class TextRagService implements TextRagPort {
             new Embedding(emb),
             keywords,
             effectivenessLimit,
-            {
-              searchMode,
-              minTextLength:  MIN_CHUNK_TEXT_LENGTH,
-              originalQuery:  query,
-              ...(metadataFilter ? { filter: metadataFilter } : {}),
-              ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
-            },
+            hybridBaseOpts,
           ),
         ),
       );
@@ -744,10 +823,9 @@ export class TextRagService implements TextRagPort {
               keywords,
               effectivenessLimit,
               {
-                searchMode,
-                minTextLength:  MIN_CHUNK_TEXT_LENGTH,
-                originalQuery:  query,
-                ...(metadataFilter ? { filter: metadataFilter } : {}),
+                ...hybridBaseOpts,
+                searchMode: 'wide',
+                scoreThreshold: undefined,
               },
             ),
           ),
@@ -756,7 +834,10 @@ export class TextRagService implements TextRagPort {
 
       const validResults = allSearchResults.filter(Boolean) as NonNullable<typeof allSearchResults[0]>[];
 
-      if (validResults.length === 0) return 'There is no relevant information in knowledge';
+      if (validResults.length === 0) {
+        this.tracing.endSpan(retrieveSpan, Date.now() - retrieveStarted);
+        return 'There is no relevant information in knowledge';
+      }
 
       const resultById = new Map<string, HybridSearchResult>();
       const perQueryForRrf: Array<Array<{ id: string; score: number }>> = [];
@@ -771,7 +852,8 @@ export class TextRagService implements TextRagPort {
         );
       }
 
-      const rrfScores = reciprocalRankFusion(perQueryForRrf);
+      const { rrfK } = this.ragSettings.get();
+      const rrfScores = reciprocalRankFusion(perQueryForRrf, rrfK);
 
       if (uaStartIndex >= 0 && uaTranslations.length > 0 && collectionName) {
         try {
@@ -807,7 +889,7 @@ export class TextRagService implements TextRagPort {
               }
 
               const existingRrf = rrfScores.get(id) ?? 0;
-              rrfScores.set(id, existingRrf + (p.score ?? 0) * 0.9 / (RRF_K + 1));
+              rrfScores.set(id, existingRrf + (p.score ?? 0) * 0.9 / (rrfK + 1));
             }
           }
           this.logger.log('UA vector search merged', { uaAdded, total: rrfScores.size });
@@ -860,38 +942,52 @@ export class TextRagService implements TextRagPort {
 
       if (avgTopScore < 0.72 || keywordMissing) {
         const hybridFallback = await this.hybridSearch.search(
-          collectionName, primaryEmbedding, keywords, effectiveLimit * 3,
-          {
-            searchMode,
-            minTextLength: MIN_CHUNK_TEXT_LENGTH,
-            originalQuery: query,
-            ...(metadataFilter ? { filter: metadataFilter } : {}),
-            ...(scoreThreshold !== undefined ? { scoreThreshold } : {}),
-          },
+          collectionName,
+          primaryEmbedding,
+          keywords,
+          effectiveLimit * 3,
+          hybridBaseOpts,
         );
-        if (!hybridFallback) return 'There is no relevant information in knowledge';
+        if (!hybridFallback) {
+          this.tracing.endSpan(retrieveSpan, Date.now() - retrieveStarted);
+          return 'There is no relevant information in knowledge';
+        }
         results = hybridFallback.map(r => ({ id: r.id, text: r.text, score: r.hybridScore }));
       }
     }
 
-    if (results.length === 0) return 'There is no relevant information in knowledge';
+    if (results.length === 0) {
+      this.tracing.endSpan(retrieveSpan, Date.now() - retrieveStarted);
+      return 'There is no relevant information in knowledge';
+    }
 
     const entityCandidateLimit =
       searchMode === 'entity'
         ? Math.max(effectiveLimit * 4, 24)
         : effectiveLimit;
 
-    if (useReranking && rerankStrategy !== 'none' && results.length > effectiveLimit && searchMode !== 'wide') {
+    const {
+      rerankScoreFloor,
+      rerankScoreFloorWithoutRerank,
+    } = this.ragSettings.get();
+    const rerankMethod = normalizeRerankStrategy(rerankStrategy);
+
+    if (
+      useReranking &&
+      rerankMethod !== 'none' &&
+      results.length > effectiveLimit
+    ) {
       const reranked = await this.reranker.rerank(query, results, {
-        topK:   entityCandidateLimit,
-        method: rerankStrategy === 'cross_encoder' ? 'listwise'
-              : rerankStrategy === 'llm_based'     ? 'llm'
-              : 'hybrid',
+        topK: entityCandidateLimit,
+        method: rerankMethod,
       });
       results = reranked.map(r => ({ id: r.item.id, text: r.item.text, score: r.finalScore }));
     }
 
-    const scoreFloor = (useReranking && rerankStrategy !== 'none') ? 0.0163 : 0.01;
+    const scoreFloor =
+      useReranking && rerankMethod !== 'none'
+        ? rerankScoreFloor
+        : rerankScoreFloorWithoutRerank;
 
     results = results.filter(r => r.score > scoreFloor);
     results = results.filter(r => (r as any).level !== 0);
@@ -968,11 +1064,19 @@ export class TextRagService implements TextRagPort {
           });
           results = filtered;
         } else {
-          this.logger.warn('EntityPostFilter: no name match found, returning unfiltered results', {
+          const fallbackLimit = Math.min(3, effectiveLimit);
+          results = [...results]
+            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            .slice(0, fallbackLimit);
+          (results as Array<{ entityFilterFallback?: boolean }>).forEach(r => {
+            r.entityFilterFallback = true;
+          });
+          this.logger.warn('EntityPostFilter: no name match, returning top-K vector results', {
             query,
             nameGroups:  nameTokenGroups.map(g => g[0]),
             topResult:   results[0]?.text.slice(0, 80),
             resultCount: results.length,
+            fallbackLimit,
           });
         }
       }
@@ -994,6 +1098,7 @@ export class TextRagService implements TextRagPort {
       } catch { }
     }
 
+    this.tracing.endSpan(retrieveSpan, Date.now() - retrieveStarted);
     return results as IDocumentWithEmbedding[];
   }
 
@@ -1057,75 +1162,6 @@ export class TextRagService implements TextRagPort {
       ...(must.length > 0 ? { must } : {}),
       ...(mustNot.length > 0 ? { must_not: mustNot } : {}),
     };
-  }
-
-  private normalizeCacheQuery(query: string): string {
-    return query.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 600);
-  }
-
-  private shouldUseAnswerCache(options?: AskQuestionOptions): boolean {
-    if (options?.useAnswerCache === false) return false;
-    if (options?.sessionId) return false;
-    if ((options?.conversationHistory?.length ?? 0) > 0) return false;
-    if (options?.useConversationMemory) return false;
-    return true;
-  }
-
-  private getAnswerCacheKey(query: string, options?: AskQuestionOptions): string {
-    const payload = {
-      q: this.normalizeCacheQuery(query),
-      limit: options?.limit,
-      scoreThreshold: options?.scoreThreshold,
-      useHybridSearch: options?.useHybridSearch,
-      useReranking: options?.useReranking,
-      rerankStrategy: options?.rerankStrategy,
-      useQueryTransformation: options?.useQueryTransformation,
-      useContextualCompression: options?.useContextualCompression,
-      useKnowledgeGraph: options?.useKnowledgeGraph,
-      useCitationTracking: options?.useCitationTracking,
-      filters: options?.filters,
-      includeSources: options?.includeSources,
-      topP: options?.topP,
-      topK: options?.topK,
-      temperature: options?.temperature,
-      maxTokens: options?.maxTokens,
-    };
-    return `answer_cache:${JSON.stringify(payload)}`;
-  }
-
-  private async getCachedAnswer(
-    query: string,
-    options?: AskQuestionOptions,
-  ): Promise<IGenerateAnswer | null> {
-    if (!this.shouldUseAnswerCache(options)) return null;
-
-    const key = this.getAnswerCacheKey(query, options);
-    try {
-      const cached = await this.redis.get<any>(key);
-      if (!cached) return null;
-      if (typeof cached === 'string') {
-        return JSON.parse(cached) as IGenerateAnswer;
-      }
-      return cached as IGenerateAnswer;
-    } catch (err: any) {
-      this.logger.warn('Answer cache get failed', { error: err?.message });
-      return null;
-    }
-  }
-
-  private async setCachedAnswer(
-    query: string,
-    options: AskQuestionOptions | undefined,
-    answer: IGenerateAnswer,
-  ): Promise<void> {
-    if (!this.shouldUseAnswerCache(options)) return;
-
-    const key = this.getAnswerCacheKey(query, options);
-    try {
-      await this.redis.set(key, JSON.stringify(answer), { ex: ANSWER_CACHE_TTL_SEC });
-    } catch (err: any) {
-      this.logger.warn('Answer cache set failed', { error: err?.message });
-    }
   }
 
   private deduplicateContextDocs(
@@ -1214,10 +1250,16 @@ export class TextRagService implements TextRagPort {
 
     const effectiveThreshold =
       classification.type === 'factual'
-        ? Math.min(p.scoreThreshold, FACTUAL_SCORE_THRESHOLD_CAP)
+        ? Math.min(
+            p.scoreThreshold,
+            this.ragSettings.get().factualScoreThresholdCap,
+          )
         : p.scoreThreshold;
 
     const applyFilter = classification.type === 'factual' && classification.confidence > 0.8;
+    const scoreHistogram = buildScoreHistogram(
+      rawRetrieved.map(el => el.score ?? 0),
+    );
 
     const preFiltered =
       applyFilter && effectiveThreshold
@@ -1234,6 +1276,10 @@ export class TextRagService implements TextRagPort {
             });
             return rawRetrieved.slice(0, 3);
           })();
+
+    const entityFilterFallback = rawRetrieved.some(
+      (r) => (r as { entityFilterFallback?: boolean }).entityFilterFallback,
+    );
 
     const retrieved = p.useParentExpansion
       ? await this.expandToParentContext(postFilterResults)
@@ -1323,7 +1369,38 @@ export class TextRagService implements TextRagPort {
         hybridEnabled:                retrieveOptions.useHybridSearch     ?? p.useHybridSearch,
         rerankEnabled:                retrieveOptions.useReranking         ?? p.useReranking,
         contextualCompressionEnabled: retrieveOptions.useContextualCompression ?? p.useContextualCompression,
+        effectiveThreshold,
+        scoreFilterApplied:           applyFilter,
+        scoreHistogram,
+        entityFilterFallback,
       },
+    };
+  }
+
+  private extractVerificationChunks(response: IGenerateAnswer): string[] {
+    const fromSources = (response.sources ?? []).map(s => s.text).filter(Boolean);
+    if (fromSources.length) return fromSources;
+    return (response.citations ?? []).map(c => c.text).filter(Boolean);
+  }
+
+  private async finalizeAnswerWithGrounding(
+    response: IGenerateAnswer,
+  ): Promise<IGenerateAnswer> {
+    const answerText = response.formattedAnswer ?? response.answer ?? '';
+    const chunks = this.extractVerificationChunks(response);
+    if (!answerText.trim() || !chunks.length) {
+      return response;
+    }
+
+    const verification = await this.confidencePort.verify(answerText, chunks);
+    const grounding = applyGroundingPolicy(answerText, verification);
+
+    return {
+      ...response,
+      answer: grounding.finalAnswer,
+      formattedAnswer: grounding.finalAnswer,
+      answerConfidence: grounding.answerConfidence,
+      confidence: grounding.answerConfidence,
     };
   }
 
@@ -1535,7 +1612,7 @@ export class TextRagService implements TextRagPort {
       return { answer: err?.message ?? 'Prompt injection detected' };
     }
 
-    const cached = await this.getCachedAnswer(query, options);
+    const cached = await this.ragCache.getCachedAnswer(query, options);
     if (cached) {
       const sanitizedCachedAnswer = this.sanitizeModelOutput(
         cached.formattedAnswer ?? cached.answer ?? '',
@@ -1553,10 +1630,11 @@ export class TextRagService implements TextRagPort {
           cacheHit: true,
         },
       };
+      const groundedCached = await this.finalizeAnswerWithGrounding(cachedWithFlag);
 
-      if (options?.includeRetrievalDiagnostics) return cachedWithFlag;
+      if (options?.includeRetrievalDiagnostics) return groundedCached;
 
-      const { retrievalDiagnostics, ...withoutDiagnostics } = cachedWithFlag;
+      const { retrievalDiagnostics, ...withoutDiagnostics } = groundedCached;
       return withoutDiagnostics;
     }
 
@@ -1591,6 +1669,11 @@ export class TextRagService implements TextRagPort {
       formattedAnswer = tracked.formattedAnswer;
     }
 
+    const includeCitationProvenance = options?.includeCitationProvenance ?? true;
+    if (!includeCitationProvenance) {
+      citations = citations.map((cite) => ({ id: cite.id, documentId: cite.documentId, text: cite.text }));
+    }
+
     if (options?.sessionId) {
       const embedding = await this.embeddingPort.embed(query);
       await this.conversationRepository.addTurn(
@@ -1600,33 +1683,40 @@ export class TextRagService implements TextRagPort {
 
     const topScore = retrieved[0]?.score;
 
-    const response: IGenerateAnswer = {
+    const retrievalScore =
+      typeof topScore === 'number' ? topScore : undefined;
+
+    const sourceSnapshots = retrieved.map(doc => ({
+      id:       doc.id,
+      text:     doc.text,
+      score:    doc.score,
+      metadata: doc.metadata,
+    }));
+
+    let response: IGenerateAnswer = {
       answer:         formattedAnswer,
       formattedAnswer,
       citations,
       relevantChunks: retrieved.length,
-      confidence:     typeof topScore === 'number' ? topScore : undefined,
+      retrievalConfidence: retrievalScore,
+      confidence: retrievalScore,
       queryType:       classification.type,
       queryConfidence: classification.confidence,
       generationParams,
       conversationContext: !!options?.sessionId,
+      sources: sourceSnapshots,
       ...(options?.includeRetrievalDiagnostics && {
         retrievalDiagnostics: {
           ...retrievalDiagnostics,
           cacheHit: false,
         },
       }),
-      ...(options?.includeSources && {
-        sources: retrieved.map(doc => ({
-          id:       doc.id,
-          text:     doc.text,
-          score:    doc.score,
-          metadata: doc.metadata,
-        })),
-      }),
+      ...(options?.includeSources && { sources: sourceSnapshots }),
     };
 
-    await this.setCachedAnswer(query, options, response);
+    response = await this.finalizeAnswerWithGrounding(response);
+
+    await this.ragCache.setCachedAnswer(query, options, response);
     this.logger.log('RagTrace_GenerateAnswer', {
       query: query.slice(0, 80),
       generationDurationMs,
@@ -1634,6 +1724,15 @@ export class TextRagService implements TextRagPort {
       citations: citations.length,
       relevantChunks: retrieved.length,
     });
+
+    if (!options?.includeRetrievalDiagnostics && response.retrievalDiagnostics) {
+      const { retrievalDiagnostics, ...withoutDiagnostics } = response;
+      return withoutDiagnostics;
+    }
+    if (!options?.includeSources && response.sources) {
+      const { sources, ...withoutSources } = response;
+      return withoutSources;
+    }
     return response;
   }
 
@@ -1649,7 +1748,7 @@ export class TextRagService implements TextRagPort {
     }
 
     
-    const cached = await this.getCachedAnswer(query, options);
+    const cached = await this.ragCache.getCachedAnswer(query, options);
     if (cached) {
       const sanitizedCachedAnswer = this.sanitizeModelOutput(
         cached.formattedAnswer ?? cached.answer ?? '',
@@ -1661,22 +1760,32 @@ export class TextRagService implements TextRagPort {
         formattedAnswer: sanitizedCachedAnswer,
         retrievalDiagnostics: { ...(cached.retrievalDiagnostics ?? {}), cacheHit: true },
       };
+      const groundedCached = await this.finalizeAnswerWithGrounding(cachedWithFlag);
+      const streamAnswer = groundedCached.formattedAnswer ?? groundedCached.answer;
       yield {
         event: 'metadata',
         metadata: {
-          relevantChunks:  cachedWithFlag.relevantChunks,
-          confidence:      cachedWithFlag.confidence,
-          queryType:       cachedWithFlag.queryType,
-          queryConfidence: cachedWithFlag.queryConfidence,
-          generationParams: cachedWithFlag.generationParams,
-          conversationContext: cachedWithFlag.conversationContext,
+          relevantChunks:  groundedCached.relevantChunks,
+          confidence:      groundedCached.answerConfidence ?? groundedCached.confidence,
+          answerConfidence: groundedCached.answerConfidence,
+          queryType:       groundedCached.queryType,
+          queryConfidence: groundedCached.queryConfidence,
+          generationParams: groundedCached.generationParams,
+          conversationContext: groundedCached.conversationContext,
           ...(options?.includeRetrievalDiagnostics && {
-            retrievalDiagnostics: cachedWithFlag.retrievalDiagnostics,
+            retrievalDiagnostics: groundedCached.retrievalDiagnostics,
           }),
         },
       };
-      yield { event: 'token', token: cachedWithFlag.formattedAnswer ?? cachedWithFlag.answer };
-      yield { event: 'done',  metadata: { citations: cachedWithFlag.citations ?? [], relevantChunks: cachedWithFlag.relevantChunks ?? 0 } };
+      yield { event: 'token', token: streamAnswer };
+      yield {
+        event: 'done',
+        metadata: {
+          citations: groundedCached.citations ?? [],
+          relevantChunks: groundedCached.relevantChunks ?? 0,
+          answerConfidence: groundedCached.answerConfidence,
+        },
+      };
       return;
     }
 
@@ -1702,13 +1811,14 @@ export class TextRagService implements TextRagPort {
     const { classification, p, retrieved, prompt, generationParams, retrievalDiagnostics } = ctx;
     const { temperature, topP, topK, maxTokens, repeatPenalty, seed } = generationParams;
     const relevantChunks = retrieved.length;
-    const confidence      = retrieved[0]?.score;
+    const retrievalConfidence = retrieved[0]?.score;
 
     yield {
       event: 'metadata',
       metadata: {
         relevantChunks,
-        confidence,
+        retrievalConfidence,
+        confidence: retrievalConfidence,
         queryType:        classification.type,
         queryConfidence:  classification.confidence,
         generationParams,
@@ -1751,28 +1861,7 @@ export class TextRagService implements TextRagPort {
       return;
     }
 
-    
-    let finalAnswer = streamedSanitizedAnswer;
-    try {
-      const verification = await this.confidencePort.verify(
-        finalAnswer,
-        retrieved.map(r => r.text),
-      );
-
-      this.logger.log('Stream_Confidence', {
-        score:    verification.confidence.score,
-        tier:     verification.confidence.tier,
-        grounded: verification.grounded,
-        verdict:  verification.llmVerdict,
-      });
-
-      if (!verification.grounded && verification.llmVerdict === 'NO') {
-        finalAnswer = 'Немає релевантної відповіді';
-        yield { event: 'correction', correctedAnswer: finalAnswer, reason: 'hallucination' };
-      }
-    } catch (err: any) {
-      this.logger.warn('Stream_Confidence: check failed', { error: err?.message });
-    }
+    const finalAnswer = streamedSanitizedAnswer;
 
     let citations: TrackCitation[] = [];
     try {
@@ -1780,50 +1869,129 @@ export class TextRagService implements TextRagPort {
       citations = useCitations
         ? this.trackCitations(finalAnswer, retrieved).citations
         : [];
+      const includeCitationProvenance = options?.includeCitationProvenance ?? true;
+      if (!includeCitationProvenance) {
+        citations = citations.map((cite) => ({ id: cite.id, documentId: cite.documentId, text: cite.text }));
+      }
     } catch (err: any) {
       yield { event: 'error', error: 'Citation tracking failed' };
       return;
     }
 
+    if (citations.length) {
+      yield { event: 'citations', citations };
+    }
+
+    const preGroundResponse: IGenerateAnswer = {
+      answer: finalAnswer,
+      formattedAnswer: finalAnswer,
+      citations,
+      relevantChunks,
+      retrievalConfidence,
+      confidence: retrievalConfidence,
+      queryType: classification.type,
+      queryConfidence: classification.confidence,
+      generationParams,
+      conversationContext: !!options?.sessionId,
+      sources: retrieved.map(doc => ({
+        id: doc.id,
+        text: doc.text,
+        score: doc.score,
+        metadata: doc.metadata,
+      })),
+    };
+
     if (options?.sessionId) {
       this.persistSessionTurn(options.sessionId, query, finalAnswer);
     }
 
-    
-    const responseForCache: IGenerateAnswer = {
-      answer:          finalAnswer,
-      formattedAnswer: finalAnswer,
-      citations,
-      relevantChunks,
-      confidence,
-      queryType:       classification.type,
-      queryConfidence: classification.confidence,
-      generationParams,
-      conversationContext: !!options?.sessionId,
-    };
-    await this.setCachedAnswer(query, options, responseForCache);
+    void this.finalizeStreamAnswerInBackground(
+      query,
+      options,
+      preGroundResponse,
+    );
 
-    yield { event: 'done', metadata: { citations, relevantChunks } };
+    yield {
+      event: 'done',
+      metadata: {
+        citations,
+        relevantChunks,
+        answerConfidence: retrievalConfidence,
+      },
+    };
+  }
+
+  /** Grounding + cache after stream `done` so the client is not blocked on LLM verification. */
+  private finalizeStreamAnswerInBackground(
+    query: string,
+    options: AskQuestionOptions | undefined,
+    response: IGenerateAnswer,
+  ): void {
+    void (async () => {
+      let answerConfidence: number | undefined;
+      let cachedResponse: IGenerateAnswer = response;
+
+      try {
+        const grounded = await this.finalizeAnswerWithGrounding(response);
+        answerConfidence = grounded.answerConfidence;
+        cachedResponse = {
+          ...grounded,
+          citations: response.citations,
+          relevantChunks: response.relevantChunks,
+          retrievalConfidence: response.retrievalConfidence,
+          confidence: grounded.answerConfidence ?? response.retrievalConfidence,
+        };
+      } catch (err: any) {
+        this.logger.warn('Stream_Confidence: check failed', { error: err?.message });
+      }
+
+      try {
+        await this.ragCache.setCachedAnswer(query, options, cachedResponse);
+      } catch (err: any) {
+        this.logger.warn('Stream_Cache: set failed', { error: err?.message });
+      }
+    })();
   }
 
   async deleteById(id: string): Promise<IDeleteDocument> {
     await this.textRepository.deleteById(id);
+    await this.ragCache.invalidateAnswerCache();
     return { deletedDocumentId: id };
   }
 
   private trackCitations(
     answer: string,
-    retrievedDocs: Array<{ id: string; text: string }>,
+    retrievedDocs: Array<{
+      id: string;
+      text: string;
+      chunkId?: string;
+      model?: string;
+      createdAt?: string;
+      startIndex?: number;
+      endIndex?: number;
+    }>,
   ): { citations: TrackCitation[]; formattedAnswer: string } {
     const citations: TrackCitation[] = [];
     let formattedAnswer = answer;
 
     retrievedDocs.forEach((doc, idx) => {
+      const metadata = (doc as { metadata?: Record<string, unknown> }).metadata ?? {};
       const sentences = doc.text.match(/[^.!?…]+[.!?…]+/g) || [];
       sentences.forEach(sentence => {
         if (sentence.length < 20) return;
         if (this.findSimilarContent(answer, sentence)) {
-          citations.push({ id: `cite_${idx}`, documentId: doc.id, text: sentence });
+          citations.push({
+            id: `cite_${idx}`,
+            documentId: doc.id,
+            text: sentence,
+            provenance: {
+              chunkId: doc.chunkId ?? (metadata.chunkId as string | undefined),
+              model: doc.model,
+              createdAt: doc.createdAt,
+              startIndex: doc.startIndex ?? (metadata.startIndex as number | undefined),
+              endIndex: doc.endIndex ?? (metadata.endIndex as number | undefined),
+            },
+          });
         }
       });
     });

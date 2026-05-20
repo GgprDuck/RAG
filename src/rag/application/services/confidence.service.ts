@@ -1,5 +1,4 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Inject } from '@nestjs/common';
 import {
   ConfidenceThresholds,
   ConfidenceScore,
@@ -7,6 +6,8 @@ import {
   ConfidenceTier,
 } from 'src/rag/domain/interfaces/confidence.interface';
 import { IConfidencePort } from 'src/rag/domain/ports/confidence.port';
+import type { IRagSettingsPort } from 'src/rag/domain/ports/rag-settings.port';
+import { LoggerPort } from 'src/rag/shared/application/ports/logger.port';
 
 interface IEmbeddingPort {
   embed(text: string): Promise<number[]>;
@@ -16,14 +17,8 @@ interface IChatLlmPort {
   complete(prompt: string): Promise<string>;
 }
 
-const DEFAULT_THRESHOLDS: ConfidenceThresholds = {
-  high: 0.85,
-  low: 0.65,
-};
-
 @Injectable()
 export class ConfidenceService implements IConfidencePort {
-  private readonly logger = new Logger(ConfidenceService.name);
   private readonly MAX_EMBED_CHARS = 5000;
   private readonly MAX_CHUNKS_TO_COMPARE = 5;
 
@@ -32,7 +27,10 @@ export class ConfidenceService implements IConfidencePort {
     private readonly embeddingPort: IEmbeddingPort,
     @Inject('IChatLlmPort')
     private readonly chatPort: IChatLlmPort,
-    private readonly configService: ConfigService,
+    @Inject('IRagSettingsPort')
+    private readonly ragSettings: IRagSettingsPort,
+    @Inject('LoggerPort')
+    private readonly logger: LoggerPort,
   ) {}
 
   async computeScore(
@@ -84,7 +82,10 @@ export class ConfidenceService implements IConfidencePort {
 
     const tier = this.scoreTier(bestScore, t);
 
-    this.logger.debug(`Confidence score: ${bestScore.toFixed(3)} → tier: ${tier}`);
+    this.logger.log('Confidence_ComputeScore', {
+      score: Number(bestScore.toFixed(3)),
+      tier,
+    });
 
     return {
       score: bestScore,
@@ -130,8 +131,9 @@ export class ConfidenceService implements IConfidencePort {
 
     const llmScore = await this.llmRelevanceScore(answer, bestContext);
 
+    const settings = this.ragSettings.get();
     const finalScore = (confidence.score + llmScore) / 2;
-    const grounded = finalScore >= 0.65;
+    const grounded = finalScore >= settings.confidenceGrayZoneFinal;
 
     return {
       grounded,
@@ -140,7 +142,7 @@ export class ConfidenceService implements IConfidencePort {
         score: finalScore,
       },
       llmVerificationUsed: true,
-      llmVerdict: llmScore >= 0.15 ? 'YES' : 'NO',
+      llmVerdict: llmScore >= settings.confidenceLlmYesThreshold ? 'YES' : 'NO',
       message: grounded ? undefined : 'Немає релевантної відповіді',
     };
   }
@@ -205,9 +207,10 @@ export class ConfidenceService implements IConfidencePort {
   }
 
   private resolveThresholds(override?: Partial<ConfidenceThresholds>): ConfidenceThresholds {
+    const settings = this.ragSettings.get();
     return {
-      high: override?.high ?? this.configService.get<number>('rag.confidence.high', DEFAULT_THRESHOLDS.high),
-      low: override?.low ?? this.configService.get<number>('rag.confidence.low', DEFAULT_THRESHOLDS.low),
+      high: override?.high ?? settings.confidenceHigh,
+      low: override?.low ?? settings.confidenceLow,
     };
   }
 

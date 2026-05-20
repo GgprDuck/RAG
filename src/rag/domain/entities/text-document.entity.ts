@@ -15,6 +15,7 @@ export class TextDocument {
     public readonly parentId?: string,
     public readonly parentText?: string,
     public readonly contextKeywords?: string[],
+    public readonly sectionTitle?: string,
     public readonly score?: number,
   ) {}
 
@@ -32,6 +33,7 @@ export class TextDocument {
     parentId?: string,
     parentText?: string,
     contextKeywords?: string[],
+    sectionTitle?: string,
     score?: number,
   ): TextDocument {
     return new TextDocument(
@@ -48,6 +50,7 @@ export class TextDocument {
       parentId,
       parentText,
       contextKeywords,
+      sectionTitle,
       score,
     );
   }

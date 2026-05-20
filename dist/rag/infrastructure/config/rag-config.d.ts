@@ -5,6 +5,8 @@ export interface HnswConfig {
     efSearch?: number;
 }
 export type TRagConfig = {
+    apiKey?: string;
+    allowOpenApi?: boolean;
     ollamaBaseUrl: string;
     ollamaEmbedModelText: string;
     ollamaEmbedModelImage: string;
@@ -32,5 +34,16 @@ export type TRagConfig = {
     neo4JUrl: string | undefined;
     neo4jUser: string | undefined;
     neo4jPassword: string | undefined;
+    rrfK: number;
+    answerCacheTtlSec: number;
+    classificationCacheTtlSec: number;
+    rerankScoreFloor: number;
+    rerankScoreFloorWithoutRerank: number;
+    hybridKeywordScrollLimit: number;
+    factualScoreThresholdCap: number;
+    confidenceHigh: number;
+    confidenceLow: number;
+    confidenceGrayZoneFinal: number;
+    confidenceLlmYesThreshold: number;
 };
 export declare const ragConfig: (() => TRagConfig) & import("@nestjs/config").ConfigFactoryKeyHost<TRagConfig>;

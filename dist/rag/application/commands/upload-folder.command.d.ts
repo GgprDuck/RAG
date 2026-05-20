@@ -1,15 +1,6 @@
 import { IUploadedFile } from "../../domain/interfaces/upload-folder.interface";
-export interface UploadFolderOptions {
-    chunkingStrategy?: 'simple' | 'semantic' | 'parent-child';
-    enableKnowledgeGraph?: boolean;
-    parentChild?: {
-        parentSize?: number;
-        childSize?: number;
-        overlap?: number;
-        storeParentText?: boolean;
-        useMarkdownHeaders?: boolean;
-    };
-}
+import { UploadFolderOptions } from "../../domain/interfaces/upload-folder-options.interface";
+export type { UploadFolderOptions };
 export declare class UploadFolderCommand {
     readonly files: IUploadedFile[];
     readonly options?: UploadFolderOptions | undefined;

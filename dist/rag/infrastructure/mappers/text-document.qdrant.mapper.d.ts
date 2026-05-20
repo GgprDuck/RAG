@@ -16,6 +16,7 @@ export declare class TextDocumentQdrantMapper {
             parentId: string | undefined;
             parentText: string | undefined;
             contextKeywords: string[] | undefined;
+            sectionTitle: string | undefined;
         };
     };
     static fromPoint(point: Schemas['ScoredPoint'] | Schemas['Record'], model?: string): TextDocument;

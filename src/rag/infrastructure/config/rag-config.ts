@@ -9,6 +9,8 @@ export interface HnswConfig {
 }
 
 export type TRagConfig = {
+  apiKey?: string;
+  allowOpenApi?: boolean;
   ollamaBaseUrl: string;
   ollamaEmbedModelText: string;
   ollamaEmbedModelImage: string;
@@ -41,11 +43,36 @@ export type TRagConfig = {
   neo4JUrl: string | undefined;
   neo4jUser: string | undefined;
   neo4jPassword: string | undefined;
+
+  rrfK: number;
+  answerCacheTtlSec: number;
+  classificationCacheTtlSec: number;
+  rerankScoreFloor: number;
+  rerankScoreFloorWithoutRerank: number;
+  hybridKeywordScrollLimit: number;
+  factualScoreThresholdCap: number;
+  confidenceHigh: number;
+  confidenceLow: number;
+  confidenceGrayZoneFinal: number;
+  confidenceLlmYesThreshold: number;
 };
 
 export const ragConfig = registerAs(RAG_CONFIG, (): TRagConfig => {
   const {
     OLLAMA_BASE_URL,
+    RAG_API_KEY,
+    RAG_ALLOW_OPEN,
+    RAG_RRF_K,
+    RAG_ANSWER_CACHE_TTL_SEC,
+    RAG_CLASSIFICATION_CACHE_TTL_SEC,
+    RAG_RERANK_SCORE_FLOOR,
+    RAG_RERANK_SCORE_FLOOR_NO_RERANK,
+    RAG_HYBRID_KEYWORD_SCROLL_LIMIT,
+    RAG_FACTUAL_SCORE_THRESHOLD_CAP,
+    RAG_CONFIDENCE_HIGH,
+    RAG_CONFIDENCE_LOW,
+    RAG_CONFIDENCE_GRAY_ZONE_FINAL,
+    RAG_CONFIDENCE_LLM_YES_THRESHOLD,
     OLLAMA_EMBED_MODEL_TEXT,
     OLLAMA_EMBED_MODEL_IMAGE,
     OLLAMA_CHAT_MODEL,
@@ -97,6 +124,14 @@ export const ragConfig = registerAs(RAG_CONFIG, (): TRagConfig => {
   };
 
   return {
+    apiKey: RAG_API_KEY,
+    // undefined = default open in non-production; only 'false' locks dev down
+    allowOpenApi:
+      RAG_ALLOW_OPEN === 'false'
+        ? false
+        : RAG_ALLOW_OPEN === 'true'
+          ? true
+          : undefined,
     ollamaBaseUrl: OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
     ollamaEmbedModelText: OLLAMA_EMBED_MODEL_TEXT || 'nomic-embed-text',
     ollamaEmbedModelImage: OLLAMA_EMBED_MODEL_IMAGE || 'clip-text',
@@ -148,5 +183,33 @@ export const ragConfig = registerAs(RAG_CONFIG, (): TRagConfig => {
     neo4JUrl: NEO4J_URI,
     neo4jPassword: NEO4J_PASSWORD,
     neo4jUser: NEO4J_USER,
+
+    rrfK: RAG_RRF_K ? Number(RAG_RRF_K) : 60,
+    answerCacheTtlSec: RAG_ANSWER_CACHE_TTL_SEC
+      ? Number(RAG_ANSWER_CACHE_TTL_SEC)
+      : 180,
+    classificationCacheTtlSec: RAG_CLASSIFICATION_CACHE_TTL_SEC
+      ? Number(RAG_CLASSIFICATION_CACHE_TTL_SEC)
+      : 3600,
+    rerankScoreFloor: RAG_RERANK_SCORE_FLOOR
+      ? Number(RAG_RERANK_SCORE_FLOOR)
+      : 0.0163,
+    rerankScoreFloorWithoutRerank: RAG_RERANK_SCORE_FLOOR_NO_RERANK
+      ? Number(RAG_RERANK_SCORE_FLOOR_NO_RERANK)
+      : 0.01,
+    hybridKeywordScrollLimit: RAG_HYBRID_KEYWORD_SCROLL_LIMIT
+      ? Number(RAG_HYBRID_KEYWORD_SCROLL_LIMIT)
+      : 500,
+    factualScoreThresholdCap: RAG_FACTUAL_SCORE_THRESHOLD_CAP
+      ? Number(RAG_FACTUAL_SCORE_THRESHOLD_CAP)
+      : 0.5,
+    confidenceHigh: RAG_CONFIDENCE_HIGH ? Number(RAG_CONFIDENCE_HIGH) : 0.85,
+    confidenceLow: RAG_CONFIDENCE_LOW ? Number(RAG_CONFIDENCE_LOW) : 0.65,
+    confidenceGrayZoneFinal: RAG_CONFIDENCE_GRAY_ZONE_FINAL
+      ? Number(RAG_CONFIDENCE_GRAY_ZONE_FINAL)
+      : 0.65,
+    confidenceLlmYesThreshold: RAG_CONFIDENCE_LLM_YES_THRESHOLD
+      ? Number(RAG_CONFIDENCE_LLM_YES_THRESHOLD)
+      : 0.15,
   };
 });

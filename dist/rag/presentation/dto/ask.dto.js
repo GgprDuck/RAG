@@ -17,7 +17,9 @@ var RerankStrategy;
 (function (RerankStrategy) {
     RerankStrategy["NONE"] = "none";
     RerankStrategy["CROSS_ENCODER"] = "cross_encoder";
+    RerankStrategy["LISTWISE_LLM"] = "listwise_llm";
     RerankStrategy["LLM_BASED"] = "llm_based";
+    RerankStrategy["HYBRID"] = "hybrid";
 })(RerankStrategy || (exports.RerankStrategy = RerankStrategy = {}));
 class ConversationMessage {
 }
@@ -115,6 +117,12 @@ __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
 ], AdvancedRagOptionsDto.prototype, "useCitationTracking", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ default: true, description: 'Include citation provenance details (chunk/version offsets when available)' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], AdvancedRagOptionsDto.prototype, "includeCitationProvenance", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({ default: false, description: 'Include retrieval diagnostics in response metadata' }),
     (0, class_validator_1.IsOptional)(),

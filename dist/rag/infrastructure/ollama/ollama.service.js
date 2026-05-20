@@ -40,14 +40,20 @@ let OllamaService = class OllamaService {
             ragConfig?.ollamaEmbedModelText || 'nomic-embed-text';
         this.chatModel = ragConfig?.ollamaChatModel;
         this.visionModel = ragConfig?.ollamaVisionModel;
-        if (!this.apiKey) {
-            this.logger.warn('OLLAMA_API_KEY is not set!');
+        this.apiKey = ragConfig?.ollamaApiKey;
+        const isLocalOllama = this.baseURL.includes('127.0.0.1') ||
+            this.baseURL.includes('localhost');
+        if (!this.apiKey && !isLocalOllama) {
+            this.logger.warn('OLLAMA_API_KEY is not set (required for remote Ollama)');
         }
     }
     getHeaders() {
-        return this.apiKey
-            ? { Authorization: `Bearer ${this.apiKey}` }
-            : {};
+        const isLocal = this.baseURL.includes('127.0.0.1') ||
+            this.baseURL.includes('localhost');
+        if (isLocal || !this.apiKey) {
+            return {};
+        }
+        return { Authorization: `Bearer ${this.apiKey}` };
     }
     async embed(prompt) {
         const MAX_CHARS = 3000;

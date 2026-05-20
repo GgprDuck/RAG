@@ -43,6 +43,7 @@ export class QdrantTextDocumentRepository
       this.qdrant.createPayloadIndex(this.collectionConfig.name, 'level',           'integer'),
       this.qdrant.createPayloadIndex(this.collectionConfig.name, 'parentId',        'keyword'),
       this.qdrant.createPayloadIndex(this.collectionConfig.name, 'textLength',      'integer'),
+      this.qdrant.createPayloadIndex(this.collectionConfig.name, 'sectionTitle',  'keyword'),
     ]);
 
     this.logger.log(

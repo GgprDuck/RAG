@@ -13,7 +13,12 @@ export interface AskQuestionOptions {
   }>;
 
   useReranking?: boolean;
-  rerankStrategy?: 'cross_encoder' | 'llm_based' | 'none' | 'hybrid';
+  rerankStrategy?:
+    | 'listwise_llm'
+    | 'cross_encoder'
+    | 'llm_based'
+    | 'none'
+    | 'hybrid';
 
   useContextualCompression?: boolean;
 
@@ -32,6 +37,7 @@ export interface AskQuestionOptions {
   useKnowledgeGraph?: boolean;
 
   useCitationTracking?: boolean;
+  includeCitationProvenance?: boolean;
   includeSources?: boolean;
   includeRetrievalDiagnostics?: boolean;
   useAnswerCache?: boolean;

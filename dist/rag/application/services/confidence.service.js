@@ -11,21 +11,15 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var ConfidenceService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConfidenceService = void 0;
 const common_1 = require("@nestjs/common");
-const config_1 = require("@nestjs/config");
-const DEFAULT_THRESHOLDS = {
-    high: 0.85,
-    low: 0.65,
-};
-let ConfidenceService = ConfidenceService_1 = class ConfidenceService {
-    constructor(embeddingPort, chatPort, configService) {
+let ConfidenceService = class ConfidenceService {
+    constructor(embeddingPort, chatPort, ragSettings, logger) {
         this.embeddingPort = embeddingPort;
         this.chatPort = chatPort;
-        this.configService = configService;
-        this.logger = new common_1.Logger(ConfidenceService_1.name);
+        this.ragSettings = ragSettings;
+        this.logger = logger;
         this.MAX_EMBED_CHARS = 5000;
         this.MAX_CHUNKS_TO_COMPARE = 5;
     }
@@ -60,7 +54,10 @@ let ConfidenceService = ConfidenceService_1 = class ConfidenceService {
             return { score: 0, tier: 'LOW', bestChunkIndex: 0 };
         }
         const tier = this.scoreTier(bestScore, t);
-        this.logger.debug(`Confidence score: ${bestScore.toFixed(3)} → tier: ${tier}`);
+        this.logger.log('Confidence_ComputeScore', {
+            score: Number(bestScore.toFixed(3)),
+            tier,
+        });
         return {
             score: bestScore,
             tier,
@@ -94,8 +91,9 @@ let ConfidenceService = ConfidenceService_1 = class ConfidenceService {
         }
         const bestContext = retrievedChunks[confidence.bestChunkIndex];
         const llmScore = await this.llmRelevanceScore(answer, bestContext);
+        const settings = this.ragSettings.get();
         const finalScore = (confidence.score + llmScore) / 2;
-        const grounded = finalScore >= 0.65;
+        const grounded = finalScore >= settings.confidenceGrayZoneFinal;
         return {
             grounded,
             confidence: {
@@ -103,7 +101,7 @@ let ConfidenceService = ConfidenceService_1 = class ConfidenceService {
                 score: finalScore,
             },
             llmVerificationUsed: true,
-            llmVerdict: llmScore >= 0.15 ? 'YES' : 'NO',
+            llmVerdict: llmScore >= settings.confidenceLlmYesThreshold ? 'YES' : 'NO',
             message: grounded ? undefined : 'Немає релевантної відповіді',
         };
     }
@@ -166,9 +164,10 @@ let ConfidenceService = ConfidenceService_1 = class ConfidenceService {
         return 'GRAY_ZONE';
     }
     resolveThresholds(override) {
+        const settings = this.ragSettings.get();
         return {
-            high: override?.high ?? this.configService.get('rag.confidence.high', DEFAULT_THRESHOLDS.high),
-            low: override?.low ?? this.configService.get('rag.confidence.low', DEFAULT_THRESHOLDS.low),
+            high: override?.high ?? settings.confidenceHigh,
+            low: override?.low ?? settings.confidenceLow,
         };
     }
     filterChunksByKeywords(chunks, question) {
@@ -177,11 +176,13 @@ let ConfidenceService = ConfidenceService_1 = class ConfidenceService {
     }
 };
 exports.ConfidenceService = ConfidenceService;
-exports.ConfidenceService = ConfidenceService = ConfidenceService_1 = __decorate([
+exports.ConfidenceService = ConfidenceService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, common_1.Inject)('IEmbeddingPort')),
     __param(1, (0, common_1.Inject)('IChatLlmPort')),
-    __metadata("design:paramtypes", [Object, Object, config_1.ConfigService])
+    __param(2, (0, common_1.Inject)('IRagSettingsPort')),
+    __param(3, (0, common_1.Inject)('LoggerPort')),
+    __metadata("design:paramtypes", [Object, Object, Object, Object])
 ], ConfidenceService);
 function cosineSimilarity(a, b) {
     if (a.length !== b.length)

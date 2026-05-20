@@ -2,13 +2,21 @@ import {
   Controller,
   Delete,
   Get,
+  Inject,
   Param,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-
-import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { CommandBusPort } from '../../shared/application/ports/command-bus.port';
 import { ApiResponse } from '../api-response/api-response';
 import { Meta } from '../api-response/meta';
+import {
+  ClearAllChatsCommand,
+  DeleteChatCommand,
+  GetChatQuery,
+  ListChatsQuery,
+} from '../../application/commands/chat-session.commands';
+import { ApiKeyGuard } from '../guards/api-key.guard';
 
 export interface ChatTurn {
   id: string;
@@ -30,39 +38,15 @@ export interface ChatDetail {
 }
 
 @Controller('rag/chats')
+@UseGuards(ApiKeyGuard)
 export class ChatController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject('CommandBus') private readonly commandBus: CommandBusPort,
+  ) {}
 
   @Get()
   async listChats(): Promise<ApiResponse<ChatSummary[]>> {
-    const rows = await this.prisma.conversationSession.findMany({
-      orderBy: { timestamp: 'desc' },
-      select: {
-        sessionId: true,
-        query: true,
-        timestamp: true,
-      },
-    });
-
-    const map = new Map<string, { firstQuery: string; lastActivity: Date; count: number }>();
-    for (const row of rows) {
-      if (!map.has(row.sessionId)) {
-        map.set(row.sessionId, {
-          firstQuery: row.query,
-          lastActivity: row.timestamp,
-          count: 1,
-        });
-      } else {
-        map.get(row.sessionId)!.count++;
-      }
-    }
-
-    const chats: ChatSummary[] = [...map.entries()].map(([sessionId, data]) => ({
-      sessionId,
-      firstMessage: data.firstQuery.slice(0, 60) + (data.firstQuery.length > 60 ? '…' : ''),
-      lastActivity: data.lastActivity,
-      turnCount: data.count,
-    }));
+    const chats = await this.commandBus.execute<ChatSummary[]>(new ListChatsQuery());
 
     return ApiResponse.success(
       chats,
@@ -76,29 +60,23 @@ export class ChatController {
     @Query('limit') limit?: string,
   ): Promise<ApiResponse<ChatDetail>> {
     const take = limit ? parseInt(limit, 10) : 100;
-
-    const rows = await this.prisma.conversationSession.findMany({
-      where: { sessionId },
-      orderBy: { timestamp: 'asc' },
-      take,
-      select: { id: true, query: true, answer: true, timestamp: true },
-    });
+    const chat = await this.commandBus.execute<ChatDetail>(new GetChatQuery(sessionId, take));
 
     return ApiResponse.success(
-      { sessionId, turns: rows },
-      new Meta({ message: 'Chat retrieved', count: rows.length }),
+      chat,
+      new Meta({ message: 'Chat retrieved', count: chat.turns.length }),
     );
   }
 
   @Delete(':sessionId')
   async deleteChat(@Param('sessionId') sessionId: string): Promise<ApiResponse<null>> {
-    await this.prisma.conversationSession.deleteMany({ where: { sessionId } });
+    await this.commandBus.execute(new DeleteChatCommand(sessionId));
     return ApiResponse.success(null, new Meta({ message: 'Chat deleted' }));
   }
 
   @Delete()
   async clearAllChats(): Promise<ApiResponse<null>> {
-    await this.prisma.conversationSession.deleteMany({});
+    await this.commandBus.execute(new ClearAllChatsCommand());
     return ApiResponse.success(null, new Meta({ message: 'All chats deleted' }));
   }
 }

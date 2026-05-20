@@ -67,13 +67,19 @@ class HybridSearchEngine {
         const minKeywordMatch = options.minKeywordMatch ?? cfg.minKeywordMatch;
         const minTextLength = options.minTextLength ?? 80;
         const fetchLimit = limit * cfg.fetchMultiplier;
+        const excludeParentsFilter = {
+            must_not: [{ key: 'level', match: { value: 0 } }],
+        };
+        const combinedFilter = options.filter
+            ? { must: [excludeParentsFilter, options.filter] }
+            : excludeParentsFilter;
         const vectorResults = await this.vectorSearch.search(collectionName, {
             vector: queryEmbedding.values,
             limit: fetchLimit,
             searchMode: qdrantMode,
             score_threshold: null,
             with_vector: true,
-            ...(options.filter ? { filter: options.filter } : {}),
+            filter: combinedFilter,
         });
         this.logger?.log('HybridSearch_vectorResults', { count: vectorResults.length, mode });
         const useKeywordScroll = (mode === 'entity' || mode === 'balanced' || mode === 'wide') && keywords.length > 0;
@@ -123,12 +129,17 @@ class HybridSearchEngine {
             const allClauses = [...contextKwClauses, ...textClauses];
             try {
                 const scrollResult = await this.vectorSearch.scroll(collectionName, {
-                    limit: 200,
+                    limit: options.keywordScrollLimit ?? 500,
                     with_payload: true,
                     filter: {
                         must: [
-                            { key: 'textLength', range: { gte: 20 } },
-                            ...(options.filter ? [options.filter] : []),
+                            { key: 'textLength', range: { gte: minTextLength } },
+                            excludeParentsFilter,
+                            ...(options.filter
+                                ? Array.isArray(options.filter.must)
+                                    ? options.filter.must
+                                    : [options.filter]
+                                : []),
                         ],
                         should: allClauses,
                     },
@@ -138,7 +149,13 @@ class HybridSearchEngine {
                     payload: p.payload,
                 }));
             }
-            catch {
+            catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                this.logger?.warn('HybridSearch_keywordScrollFailed', {
+                    mode,
+                    keywordCount: keywords.length,
+                    error: message,
+                });
             }
         }
         const vectorIds = new Set(vectorResults.map(r => r.id.toString()));

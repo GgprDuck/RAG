@@ -38,3 +38,20 @@ model KnowledgeLink {
   @@index([keywords])
   @@map("knowledge_links")
 }
+
+model AnswerFeedback {
+  id             String   @id @default(uuid()) @db.Uuid
+  sessionId      String   @map("session_id") @db.VarChar(255)
+  answerId       String?  @map("answer_id") @db.VarChar(255)
+  feedbackType   String   @map("feedback_type") @db.VarChar(50)
+  status         String   @default("pending") @db.VarChar(50)
+  score          Int?
+  correctionText String?  @map("correction_text") @db.Text
+  comment        String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@index([sessionId, createdAt])
+  @@map("answer_feedback")
+}

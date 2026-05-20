@@ -1,16 +1,14 @@
 import { Injectable, Inject, BadRequestException } from "@nestjs/common";
-import { IConfidencePort } from "src/rag/domain/ports/confidence.port";
 import { TextRagPort } from "src/rag/domain/ports/textRagPort";
 import { LoggerPort } from "src/rag/shared/application/ports/logger.port";
 import { AskQuestionCommand } from "../commands/ask-question.command";
-import { IGenerateAnswer, IStreamChunk } from "../common/interfaces/rag-documents.interfaces";
+import { IGenerateAnswer } from "../common/interfaces/rag-documents.interfaces";
 
 @Injectable()
 export class AskQuestionHandler {
   constructor(
     @Inject('TextRagPort') private readonly textRag: TextRagPort,
     @Inject('LoggerPort') private readonly logger: LoggerPort,
-    @Inject('IConfidencePort') private readonly confidencePort: IConfidencePort,
   ) {}
 
   async execute(cmd: AskQuestionCommand): Promise<IGenerateAnswer> {
@@ -69,69 +67,6 @@ export class AskQuestionHandler {
       return { answer: raw };
     }
 
-    const chunks = (raw.sources?.length ? raw.sources : (raw.citations ?? []))
-      .map((s: { text: string }) => s.text)
-      .filter(Boolean);
-
-      const verification = await this.confidencePort.verify(raw.answer, chunks);
-
-      this.logger.log('AskQuestion_Confidence', {
-        score:               verification.confidence.score,
-        tier:                verification.confidence.tier,
-        grounded:            verification.grounded,
-        llmVerificationUsed: verification.llmVerificationUsed,
-        llmVerdict:          verification.llmVerdict,
-      });
-      
-      let finalAnswer = raw.answer;
-      
-      if (!verification.grounded && verification.llmVerdict === 'NO') {
-        finalAnswer = 'Немає релевантної відповіді';
-      }
-      
-      return {
-        ...raw,
-        confidence: verification.confidence.score,
-        formattedAnswer: finalAnswer,
-      };
-  }
-
-  streamableExecute(cmd: AskQuestionCommand): AsyncGenerator<IStreamChunk> {
-    if (!cmd.question || typeof cmd.question !== 'string' || !cmd.question.trim()) {
-      this.logger.log('AskQuestion_Stream_Invalid', { q: cmd.question });
-      return (async function* () {
-        yield { event: 'error' as const, error: 'A valid question must be provided.' };
-      })();
-    }
-
-    const opts = cmd.options;
-
-    this.logger.log('AskQuestion_Stream', {
-      q:          cmd.question,
-      hasFilters: (opts?.filters?.length ?? 0) > 0,
-    });
-
-    return this.textRag.streamableGenerateAnswer(cmd.question, {
-      limit:                    opts?.limit,
-      scoreThreshold:           opts?.scoreThreshold,
-      filters:                  opts?.filters,
-      useHybridSearch:          opts?.useHybridSearch,
-      useReranking:             opts?.useReranking,
-      rerankStrategy:           opts?.rerankStrategy,
-      useQueryTransformation:   opts?.useQueryTransformation,
-      useContextualCompression: opts?.useContextualCompression,
-      useConversationMemory:    opts?.useConversationMemory,
-      useCitationTracking:      opts?.useCitationTracking,
-      includeRetrievalDiagnostics: opts?.includeRetrievalDiagnostics,
-      useAnswerCache:           opts?.useAnswerCache,
-      useKnowledgeGraph:        opts?.useKnowledgeGraph,
-      temperature:              opts?.temperature,
-      topP:                     opts?.topP,
-      topK:                     opts?.topK,
-      maxTokens:                opts?.maxTokens,
-      includeSources:           opts?.includeSources,
-      sessionId:                opts?.sessionId,
-      conversationHistory:      opts?.conversationHistory,
-    });
+    return raw;
   }
 }

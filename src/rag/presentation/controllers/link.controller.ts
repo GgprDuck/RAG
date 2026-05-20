@@ -7,19 +7,24 @@ import {
     HttpCode,
     HttpStatus,
     BadRequestException,
-    NotFoundException,
     Inject,
     Post,
     UploadedFiles,
     UseInterceptors,
+    UseGuards,
   } from '@nestjs/common';
-  import { LinkService, LinkSearchResult } from '../../application/services/link.service';
-  import { IKnowledgeLink, IKnowledgeLinkRepository } from '../../domain/interfaces/knowledge-link.interface';
-  import { LoggerPort } from '../../shared/application/ports/logger.port';
+  import { IKnowledgeLink } from '../../domain/interfaces/knowledge-link.interface';
   import { FilesInterceptor } from '@nestjs/platform-express';
   import { memoryStorage } from 'multer';
-  import { ExtractLinksHandler } from 'src/rag/application/handlers/extract-links.handler';
-  import { IndexLinksCommand } from 'src/rag/application/commands/extract-links.command';
+  import { CommandBusPort } from 'src/rag/shared/application/ports/command-bus.port';
+  import {
+    DeleteLinksBySourceFileCommand,
+    GetAllLinksQuery,
+    IndexLinksFilesCommand,
+    QueryLinksQuery,
+    SearchLinksQuery,
+  } from 'src/rag/application/commands/link.commands';
+  import { ApiKeyGuard } from '../guards/api-key.guard';
   
   export interface GetAllLinksResponse {
     total: number;
@@ -53,85 +58,33 @@ import {
     });
   
   @Controller('links')
+  @UseGuards(ApiKeyGuard)
   export class LinksController {
     constructor(
-      private readonly linkService: LinkService,
-      @Inject('IKnowledgeLinkRepository')
-      private readonly repo: IKnowledgeLinkRepository,
-      @Inject('LoggerPort')
-      private readonly logger: LoggerPort,
-      private readonly handler: ExtractLinksHandler,
+      @Inject('CommandBus') private readonly commandBus: CommandBusPort,
     ) {}
   
     @Get()
     async getAllLinks(
       @Query('sourceFile') sourceFile?: string,
     ): Promise<GetAllLinksResponse> {
-      let links = await this.repo.findAll();
-  
-      if (sourceFile) {
-        links = links.filter(l => l.sourceFile === sourceFile);
-      }
-  
-      this.logger.log('LinksController.getAllLinks', {
-        sourceFile: sourceFile ?? 'all',
-        total: links.length,
-      });
-  
-      return { total: links.length, links };
+      return this.commandBus.execute<GetAllLinksResponse>(new GetAllLinksQuery(sourceFile));
     }
   
     @Get('search')
     async searchLinks(
       @Query('q') q?: string,
     ): Promise<SearchLinksResponse> {
-      if (!q || !q.trim()) {
-        throw new BadRequestException('Query param "q" is required');
-      }
-  
-      const result: LinkSearchResult = await this.linkService.findLinksForContext(q.trim());
-  
-      this.logger.log('LinksController.searchLinks', {
-        q,
-        found: result.found,
-        total: result.links.length,
-      });
-  
-      return {
-        query: q.trim(),
-        total: result.links.length,
-        links: result.links,
-        block: result.block,
-      };
+      if (!q) throw new BadRequestException('Query param "q" is required');
+      return this.commandBus.execute<SearchLinksResponse>(new SearchLinksQuery(q));
     }
   
     @Get('query')
     async queryLinks(
       @Query('q') q?: string,
     ): Promise<SearchLinksResponse> {
-      if (!q || !q.trim()) {
-        throw new BadRequestException('Query param "q" is required');
-      }
-  
-      const result: LinkSearchResult = await this.linkService.findLinksForQuery(q.trim());
-  
-      if (!result.found) {
-        throw new NotFoundException(
-          'Query does not appear to be link-related. Use /links/search for keyword lookup.',
-        );
-      }
-  
-      this.logger.log('LinksController.queryLinks', {
-        q,
-        total: result.links.length,
-      });
-  
-      return {
-        query: q.trim(),
-        total: result.links.length,
-        links: result.links,
-        block: result.block,
-      };
+      if (!q) throw new BadRequestException('Query param "q" is required');
+      return this.commandBus.execute<SearchLinksResponse>(new QueryLinksQuery(q));
     }
   
     @Delete(':sourceFile')
@@ -139,15 +92,9 @@ import {
     async deleteBySourceFile(
       @Param('sourceFile') sourceFile: string,
     ): Promise<DeleteLinksResponse> {
-      if (!sourceFile || !sourceFile.trim()) {
-        throw new BadRequestException('sourceFile param is required');
-      }
-  
-      await this.repo.deleteBySourceFile(sourceFile.trim());
-  
-      this.logger.log('LinksController.deleteBySourceFile', { sourceFile });
-  
-      return { sourceFile: sourceFile.trim(), deleted: true };
+      return this.commandBus.execute<DeleteLinksResponse>(
+        new DeleteLinksBySourceFileCommand(sourceFile),
+      );
     }
   
     @Post('index-links')
@@ -172,20 +119,8 @@ import {
           .replace(/^\/+/, ''),
       }));
   
-      const folderRoots = [
-        ...new Set(
-          normalizedFiles
-            .map((f) => f.originalname.split('/').slice(0, -1).join('/'))
-            .filter(Boolean),
-        ),
-      ];
-  
-      this.logger.log('LinksController.indexLinks received', {
-        totalFiles:  normalizedFiles.length,
-        folderRoots: folderRoots.length ? folderRoots : ['(flat — no subfolders)'],
-        files:       normalizedFiles.map((f) => f.originalname),
-      });
-  
-      return this.handler.execute(new IndexLinksCommand(normalizedFiles));
+      return this.commandBus.execute<IndexLinksResponse>(
+        new IndexLinksFilesCommand(normalizedFiles),
+      );
     }
   }

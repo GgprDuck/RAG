@@ -21,6 +21,17 @@ export class RagSettingsAdapter implements IRagSettingsPort {
       textRagDefaultLimit: c.textRagDefaultLimit,
       textRagVectorSize: c.textRagVectorSize,
       imageRagMinScoreThreshold: c.imageRagMinScoreThreshold,
+      rrfK: c.rrfK,
+      answerCacheTtlSec: c.answerCacheTtlSec,
+      classificationCacheTtlSec: c.classificationCacheTtlSec,
+      rerankScoreFloor: c.rerankScoreFloor,
+      rerankScoreFloorWithoutRerank: c.rerankScoreFloorWithoutRerank,
+      hybridKeywordScrollLimit: c.hybridKeywordScrollLimit,
+      factualScoreThresholdCap: c.factualScoreThresholdCap,
+      confidenceHigh: c.confidenceHigh,
+      confidenceLow: c.confidenceLow,
+      confidenceGrayZoneFinal: c.confidenceGrayZoneFinal,
+      confidenceLlmYesThreshold: c.confidenceLlmYesThreshold,
     };
   }
 }

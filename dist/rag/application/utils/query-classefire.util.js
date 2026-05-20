@@ -4,7 +4,7 @@ exports.QueryClassifier = void 0;
 const PROFILE_BY_TYPE = {
     entity: {
         limit: 16,
-        scoreThreshold: 0.6,
+        scoreThreshold: 0.35,
         searchMode: 'entity',
         useHybridSearch: true,
         useQueryTransformation: true,
@@ -24,12 +24,12 @@ const PROFILE_BY_TYPE = {
     },
     factual: {
         limit: 15,
-        scoreThreshold: 0.85,
+        scoreThreshold: 0.45,
         searchMode: 'balanced',
         useHybridSearch: true,
         useQueryTransformation: true,
         useReranking: true,
-        rerankStrategy: 'cross_encoder',
+        rerankStrategy: 'listwise_llm',
         useContextualCompression: true,
         useParentExpansion: true,
         useKnowledgeGraph: false,
@@ -44,7 +44,7 @@ const PROFILE_BY_TYPE = {
     },
     wide: {
         limit: 12,
-        scoreThreshold: 0.72,
+        scoreThreshold: 0.38,
         searchMode: 'wide',
         useHybridSearch: true,
         useQueryTransformation: true,

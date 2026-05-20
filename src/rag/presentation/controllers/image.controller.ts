@@ -8,6 +8,7 @@ import {
   Query,
   UploadedFiles,
   UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { CommandBusPort } from '../../shared/application/ports/command-bus.port';
@@ -20,8 +21,10 @@ import {
 import { ApiResponse } from '../api-response/api-response';
 import { Meta } from '../api-response/meta';
 import { IUploadImage, IImageWithScore, IImageWithoutScore, IDeleteImage } from 'src/rag/application/common/interfaces/image.interfaces';
+import { ApiKeyGuard } from '../guards/api-key.guard';
 
 @Controller('rag/images')
+@UseGuards(ApiKeyGuard)
 export class RagImagesController {
   constructor(
     @Inject('CommandBus') private readonly commandBus: CommandBusPort,

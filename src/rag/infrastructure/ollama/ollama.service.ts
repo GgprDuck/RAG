@@ -57,16 +57,25 @@ export class OllamaService {
 
     this.chatModel   = ragConfig?.ollamaChatModel;
     this.visionModel = ragConfig?.ollamaVisionModel;
+    this.apiKey      = ragConfig?.ollamaApiKey;
 
-    if (!this.apiKey) {
-      this.logger.warn('OLLAMA_API_KEY is not set!');
+    const isLocalOllama =
+      this.baseURL.includes('127.0.0.1') ||
+      this.baseURL.includes('localhost');
+
+    if (!this.apiKey && !isLocalOllama) {
+      this.logger.warn('OLLAMA_API_KEY is not set (required for remote Ollama)');
     }
   }
 
   private getHeaders() {
-    return this.apiKey
-      ? { Authorization: `Bearer ${this.apiKey}` }
-      : {};
+    const isLocal =
+      this.baseURL.includes('127.0.0.1') ||
+      this.baseURL.includes('localhost');
+    if (isLocal || !this.apiKey) {
+      return {};
+    }
+    return { Authorization: `Bearer ${this.apiKey}` };
   }
 
   async embed(prompt: string): Promise<number[] | null> {

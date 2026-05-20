@@ -69,9 +69,53 @@ let ConversationSessionPrismaRepository = class ConversationSessionPrismaReposit
         catch { }
         return turns;
     }
+    async getTurns(sessionId, maxTurns = 100) {
+        const sessions = await this.prisma.conversationSession.findMany({
+            where: { sessionId },
+            orderBy: { timestamp: 'asc' },
+            take: maxTurns,
+            select: { id: true, query: true, answer: true, timestamp: true },
+        });
+        return sessions.map((s) => ({
+            id: s.id,
+            query: s.query,
+            answer: s.answer,
+            timestamp: s.timestamp,
+        }));
+    }
+    async listSessionHeads(limit = 500) {
+        const sessions = await this.prisma.conversationSession.findMany({
+            orderBy: { timestamp: 'desc' },
+            take: limit,
+            select: {
+                sessionId: true,
+                query: true,
+                timestamp: true,
+            },
+        });
+        return sessions.map((s) => ({
+            sessionId: s.sessionId,
+            query: s.query,
+            timestamp: s.timestamp,
+        }));
+    }
     async clearSession(sessionId) {
         await this.prisma.conversationSession.deleteMany({ where: { sessionId } });
         await this.bustSessionCache(sessionId);
+    }
+    async clearAllSessions() {
+        await this.prisma.conversationSession.deleteMany({});
+        try {
+            const pattern = `rag:session:*`;
+            let cursor = '0';
+            do {
+                const [next, keys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+                cursor = next;
+                if (keys.length)
+                    await this.redis.del(...keys);
+            } while (cursor !== '0');
+        }
+        catch { }
     }
     async deleteOldSessions(beforeDate) {
         const result = await this.prisma.conversationSession.deleteMany({

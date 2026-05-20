@@ -1,4 +1,4 @@
-import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { CommandBusPort } from '../../shared/application/ports/command-bus.port';
 import { ApiResponse } from '../api-response/api-response';
 export interface ChatTurn {
     id: string;
@@ -17,8 +17,8 @@ export interface ChatDetail {
     turns: ChatTurn[];
 }
 export declare class ChatController {
-    private readonly prisma;
-    constructor(prisma: PrismaService);
+    private readonly commandBus;
+    constructor(commandBus: CommandBusPort);
     listChats(): Promise<ApiResponse<ChatSummary[]>>;
     getChat(sessionId: string, limit?: string): Promise<ApiResponse<ChatDetail>>;
     deleteChat(sessionId: string): Promise<ApiResponse<null>>;

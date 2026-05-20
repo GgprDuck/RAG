@@ -9,33 +9,10 @@ export declare class GetImagesByKeywordQuery {
     readonly limit?: number | undefined;
     constructor(query: string, limit?: number | undefined);
 }
+import { AskQuestionOptions } from "../../domain/interfaces/ask-question.interface";
 export declare class RetrieveDocumentsQuery {
     readonly query: string;
     readonly limit?: number | undefined;
-    readonly options?: {
-        useHybridSearch?: boolean;
-        useReranking?: boolean;
-        rerankStrategy?: "cross_encoder" | "llm_based" | "none";
-        useQueryTransformation?: boolean;
-        useContextualCompression?: boolean;
-        scoreThreshold?: number;
-        filters?: Array<{
-            field: string;
-            value: unknown;
-            operator?: string;
-        }>;
-    } | undefined;
-    constructor(query: string, limit?: number | undefined, options?: {
-        useHybridSearch?: boolean;
-        useReranking?: boolean;
-        rerankStrategy?: "cross_encoder" | "llm_based" | "none";
-        useQueryTransformation?: boolean;
-        useContextualCompression?: boolean;
-        scoreThreshold?: number;
-        filters?: Array<{
-            field: string;
-            value: unknown;
-            operator?: string;
-        }>;
-    } | undefined);
+    readonly options?: Pick<AskQuestionOptions, "useHybridSearch" | "useReranking" | "rerankStrategy" | "useQueryTransformation" | "useContextualCompression" | "scoreThreshold" | "filters"> | undefined;
+    constructor(query: string, limit?: number | undefined, options?: Pick<AskQuestionOptions, "useHybridSearch" | "useReranking" | "rerankStrategy" | "useQueryTransformation" | "useContextualCompression" | "scoreThreshold" | "filters"> | undefined);
 }
